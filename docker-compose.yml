@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:16
+    container_name: roommind-db
+    environment:
+      POSTGRES_DB: roommind
+      POSTGRES_USER: roommind
+      POSTGRES_PASSWORD: roommind
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roommind"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
