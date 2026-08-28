@@ -17,6 +17,18 @@ Boot backend, React frontend, PostgreSQL.
 - Do not rewrite working code that has already been reviewed unless it is
   actually broken.
 
+## Documentation lookups
+
+- The `context7` MCP server is configured. Use it to fetch current
+  documentation before writing code against a library, rather than working
+  from memory.
+- This matters here in particular: the backend is on **Spring Boot 4 /
+  Spring Security 7**, which is newer than most model training data and
+  renamed several starters. Check the docs before writing security,
+  websocket or Flyway configuration.
+- Also worth checking there when the time comes: the Anthropic Java SDK,
+  Flyway migration syntax, and STOMP setup.
+
 ## Documents
 
 - `project-scope.md` — features and product decisions
@@ -43,7 +55,8 @@ Boot backend, React frontend, PostgreSQL.
 - **`JAVA_HOME` has trailing spaces** (`C:\Program Files\Java\jdk-23    `),
   which breaks `./mvnw` from Git Bash. Prefix commands with
   `JAVA_HOME="C:\Program Files\Java\jdk-23"` until the variable is fixed.
-- Node is 18, so the frontend is pinned to Vite 5 / React 18.
+- Node is 24 (LTS). The frontend stays on Vite 5 / React 18, which were
+  chosen under Node 18 and still build fine. No reason to upgrade them.
 
 ## Current state
 
