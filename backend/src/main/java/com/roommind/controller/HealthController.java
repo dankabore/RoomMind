@@ -1,8 +1,9 @@
-package com.roommind.health;
+package com.roommind.controller;
 
 import java.util.Map;
 
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,7 +20,7 @@ public class HealthController {
 	}
 
 	@GetMapping("/health")
-	public Map<String, String> health() {
+	public ResponseEntity<Map<String, String>> health() {
 		String database;
 		try {
 			jdbcTemplate.queryForObject("select 1", Integer.class);
@@ -29,6 +30,6 @@ public class HealthController {
 			database = "down";
 		}
 
-		return Map.of("service", "roommind", "status", "ok", "database", database);
+		return ResponseEntity.ok(Map.of("service", "roommind", "status", "ok", "database", database));
 	}
 }

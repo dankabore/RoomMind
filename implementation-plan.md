@@ -19,15 +19,15 @@ the one above it runs.
 
 ## Phase 2 — Users can register and log in
 
-- [ ] Migration: `users` table (id, username, display name, password hash,
-      language, created at)
-- [ ] User entity and repository
-- [ ] Registration endpoint with validation and unique username
-- [ ] Spring Security config: stateless, BCrypt password hashing
-- [ ] JWT signing key loaded from environment
-- [ ] Login endpoint returning an access token
-- [ ] Token validation on protected endpoints
-- [ ] `/me` endpoint returning the current user
+- [x] Migration: `users` table (id, email, username, password hash, created at);
+      display name and language move to the profile migration
+- [x] User entity and repository
+- [x] Registration endpoint with validation, unique email and username
+- [x] Spring Security config: stateless, BCrypt password hashing
+- [x] JWT signing key from `app.jwt.secret`, overridable by `APP_JWT_SECRET`
+- [x] Login endpoint returning an access token
+- [x] Token validation on protected endpoints
+- [x] `/api/auth/me` endpoint returning the current user
 - [ ] React: register page
 - [ ] React: login page
 - [ ] React: store the token, attach it to every request via an axios instance
