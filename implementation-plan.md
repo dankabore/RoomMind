@@ -28,12 +28,14 @@ the one above it runs.
 - [x] Login endpoint returning an access token
 - [x] Token validation on protected endpoints
 - [x] `/api/auth/me` endpoint returning the current user
-- [ ] React: register page
-- [ ] React: login page
-- [ ] React: store the token, attach it to every request via an axios instance
-- [ ] React: axios interceptor sending expired or rejected tokens back to login
-- [ ] React: protected routes
-- [ ] React: logout clears the token
+- [x] React: register page
+- [x] React: login page
+- [x] React: store the token, attach it to every request via an axios instance
+- [ ] React: axios interceptor sending expired or rejected tokens back to login —
+      the route guard already checks the token on entry; the interceptor waits
+      for a page that keeps calling the API after it has loaded
+- [x] React: protected routes
+- [x] React: logout clears the token
 
 ## Phase 3 — Messages send and persist
 
