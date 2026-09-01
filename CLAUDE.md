@@ -74,6 +74,14 @@ Backend packages under `backend/src/main/java/com/roommind/`:
     entity/      User
     mapper/      UserMapper
 
+Frontend under `frontend/src/`:
+
+    lib/         api.ts (axios instance and error text), auth.ts (token
+                 storage), forms.ts (field-error state and shared checks)
+    pages/       LoginPage, RegisterPage — state, validation rules, submit
+    components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth
+    App.tsx      the signed-in home page
+
 Migrations live in `backend/src/main/resources/db/migration/`.
 
 ## Running it
@@ -87,23 +95,29 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - **Postgres runs on host port 5433**, not 5432. A PostgreSQL 18 Windows
   service already owns 5432 on this machine and wins the connection. Do not
   "fix" the port back to 5432.
-- **`JAVA_HOME` has trailing spaces** (`C:\Program Files\Java\jdk-23    `),
-  which breaks `./mvnw` from Git Bash. Prefix commands with
-  `JAVA_HOME="C:\Program Files\Java\jdk-23"` until the variable is fixed.
+- **The build runs on JDK 21**, the version `pom.xml` targets. `JAVA_HOME` is
+  machine-wide and points at `C:\Program Files\Microsoft\jdk-21.0.8.9-hotspot`;
+  IntelliJ's project SDK and language level are the same 21 (`ms-21`). It used
+  to hold `C:\Program Files\Java\jdk-23` with four trailing spaces, which broke
+  `./mvnw` from Git Bash with "JAVA_HOME is not defined correctly" — if that
+  error ever returns, check the variable for trailing spaces first.
+- JDK 17 and 23 are also installed and should stay unused here: 17 cannot
+  compile for release 21 at all, and 23 is past its update window.
 - Node is 24 (LTS). The frontend stays on Vite 5 / React 18, which were
   chosen under Node 18 and still build fine. No reason to upgrade them.
-- **JDK 23 does not run annotation processors found only on the classpath.**
-  Lombok and MapStruct must stay declared in `annotationProcessorPaths` in
-  `backend/pom.xml`, with `lombok-mapstruct-binding` between them. Symptoms if
-  this breaks: "cannot find symbol" on every generated getter, or mappers that
-  compile but return empty objects.
+- **Lombok and MapStruct stay declared in `annotationProcessorPaths`** in
+  `backend/pom.xml`, with `lombok-mapstruct-binding` between them. This was
+  first needed because JDK 23 ignores annotation processors found only on the
+  classpath; declaring them explicitly is correct on 21 as well, so leave it.
+  Symptoms if it breaks: "cannot find symbol" on every generated getter, or
+  mappers that compile but return empty objects.
 
 ## Current state
 
 - Phase 1 done: both servers run, `/api/health` reports database connectivity,
   CORS allows the Vite origin.
-- Phase 2 backend done: register, login and `/api/auth/me` work with email and
-  password. React register/login pages are the next feature.
+- Phase 2 done: register, login, logout and `/api/auth/me` work end to end.
+  Chat conversations and messages are the next feature.
 - `V1__create_users_table.sql` is the only migration: id, email, username,
   password hash, created at. Display name and language arrive with the profile
   feature. `ddl-auto=validate`, so entities must match migrations.
@@ -116,5 +130,14 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Token validation is Spring Security's `oauth2ResourceServer`, not a
   hand-written filter. There is no `UserDetailsService` or
   `AuthenticationProvider`: `AuthService` checks the password itself.
+- Errors come back as RFC 9457 problem details
+  (`spring.mvc.problemdetails.enabled`), so the reason on a
+  `ResponseStatusException` reaches the browser as `detail`. `errorMessage()` in
+  `lib/api.ts` is what reads it.
+- The token lives in `localStorage` under `roommind.token`. An axios request
+  interceptor attaches it; logging out just deletes it and clears the query
+  cache, since the backend holds no session.
+- `RequireAuth` wraps protected routes and calls `/api/auth/me` before rendering,
+  so a token that expired between visits sends the person back to login.
 - Verification script for the whole auth flow lives in the session scratchpad,
   not the repo. Rewrite it if it is needed again.
