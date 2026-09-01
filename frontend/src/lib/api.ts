@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getToken } from './auth'
+import { clearToken, getToken } from './auth'
 
 export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
@@ -15,6 +15,45 @@ api.interceptors.request.use((config) => {
   }
   return config
 })
+
+// Signing in is allowed to fail with a 401 — that is just a wrong password, and
+// the login form has its own message for it. Only those two endpoints are
+// exempt; a 401 from anywhere else means the token we sent was not accepted.
+const SIGN_IN_PATHS = ['/api/auth/login', '/api/auth/register']
+
+/**
+ * Runs after every response and catches the case the route guard cannot: a
+ * token that was fine when the page loaded but has expired while the person was
+ * sitting on it. Any later call then comes back 401, and rather than let the
+ * page show an error it will keep showing, we throw the dead token away and
+ * send them to the login page.
+ *
+ * The redirect is a plain browser navigation rather than React Router's, because
+ * this file is not a component and has no access to the router. Leaving the page
+ * this way also empties the cached query answers, which is what we want — none
+ * of them should survive into the next person's session.
+ */
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const url = error.config?.url ?? ''
+      const isSignIn = SIGN_IN_PATHS.some((path) => url.includes(path))
+      // Already on the login page means there is nothing to send them back
+      // from, and navigating there again would only reload it in a loop.
+      const alreadyThere = window.location.pathname === '/login'
+
+      if (!isSignIn && !alreadyThere) {
+        clearToken()
+        window.location.assign('/login')
+      }
+    }
+
+    // Hand the error on regardless, so the call that made the request still
+    // sees it and its own catch block runs.
+    return Promise.reject(error)
+  },
+)
 
 /**
  * Turns whatever axios threw into a sentence worth showing a user. The backend
