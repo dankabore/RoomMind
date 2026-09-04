@@ -31,9 +31,9 @@ the one above it runs.
 - [x] React: register page
 - [x] React: login page
 - [x] React: store the token, attach it to every request via an axios instance
-- [ ] React: axios interceptor sending expired or rejected tokens back to login —
-      the route guard already checks the token on entry; the interceptor waits
-      for a page that keeps calling the API after it has loaded
+- [x] React: axios interceptor sending expired or rejected tokens back to login —
+      the route guard already checks the token on entry; the interceptor catches
+      a token that expires while a loaded page keeps calling the API
 - [x] React: protected routes
 - [x] React: logout clears the token
 
