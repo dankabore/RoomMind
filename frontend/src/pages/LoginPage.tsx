@@ -6,14 +6,17 @@ import SubmitButton from '../components/SubmitButton'
 import TextField from '../components/TextField'
 import { api, errorMessage } from '../lib/api'
 import { setToken } from '../lib/auth'
-import { isBlank, useFieldErrors, type FieldErrors } from '../lib/forms'
+import { fieldErrorsFrom, isBlank, useFieldErrors } from '../lib/forms'
+import { loginSchema } from '../lib/schemas'
 
 type TokenResponse = {
   token: string
   expiresIn: number
 }
 
-type Field = 'email' | 'password'
+// The field names, read off the schema rather than listed again here, so a
+// renamed rule cannot leave a stale name behind.
+type Field = keyof typeof loginSchema.shape
 
 /**
  * Signing in. A correct email and password come back as a token, which is
@@ -37,36 +40,25 @@ function LoginPage() {
   // never sees the message explaining what is wrong with it.
   const incomplete = isBlank(email) || password === ''
 
-  // Only checks that something was typed. Whether the email and password are
-  // actually right is the backend's call, and it answers with one message for
-  // both so the form cannot be used to discover which emails have accounts.
-  function validate(): FieldErrors<Field> {
-    const found: FieldErrors<Field> = {}
-
-    if (isBlank(email)) {
-      found.email = 'Enter your email.'
-    }
-    if (password === '') {
-      found.password = 'Enter your password.'
-    }
-
-    return found
-  }
-
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setError(null)
 
-    const found = validate()
-    setErrors(found)
-    if (Object.keys(found).length > 0) {
+    // safeParse checks what was typed against loginSchema and hands back the
+    // verdict instead of throwing: either the accepted values, or a list of
+    // everything wrong with them. What counts as wrong lives in lib/schemas.ts.
+    const checked = loginSchema.safeParse({ email, password })
+    if (!checked.success) {
+      setErrors(fieldErrorsFrom<Field>(checked.error))
       return
     }
+    setErrors({})
 
     setSubmitting(true)
 
     try {
-      const response = await api.post<TokenResponse>('/api/auth/login', { email, password })
+      // checked.data, not the raw state, so the email goes up trimmed.
+      const response = await api.post<TokenResponse>('/api/auth/login', checked.data)
       setToken(response.data.token)
       // replace, not push: the back button should not return to a login page
       // that has already been used.

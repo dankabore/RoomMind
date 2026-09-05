@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ZodError } from 'zod'
 
 /**
  * The complaints a form is currently showing, keyed by field name. Every key is
@@ -27,10 +28,24 @@ export function isBlank(value: string): boolean {
 }
 
 /**
- * Deliberately loose. The only address that truly counts as valid is one that
- * accepts mail, so this catches the obvious typo and leaves the real judgement
- * to the backend rather than pretending a regular expression can decide it.
+ * Turns what zod reports into the shape the fields above read.
+ *
+ * A rejected value comes back as a list of `issues`, each carrying the message
+ * and the `path` to the field it belongs to — `['username']` here, since these
+ * forms are one level deep. One field can collect several issues at once (an
+ * empty username is both blank and too short), and only the first is kept,
+ * because the checks are written in the order a person should be told about
+ * them and two lines under one box would only compete.
  */
-export function looksLikeEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())
+export function fieldErrorsFrom<Field extends string>(error: ZodError): FieldErrors<Field> {
+  const found: FieldErrors<Field> = {}
+
+  for (const issue of error.issues) {
+    const field = issue.path[0] as Field | undefined
+    if (field !== undefined && found[field] === undefined) {
+      found[field] = issue.message
+    }
+  }
+
+  return found
 }

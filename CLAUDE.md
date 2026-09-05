@@ -40,6 +40,24 @@ Boot backend, React frontend, PostgreSQL.
   belongs to Boot.
 - Tabs for indentation; imports grouped `java`, project, `org.springframework`.
 
+## Frontend conventions
+
+- **Zod is the validation library.** Every form is checked against a zod schema
+  before it is sent; no hand-written `if` chains, and no second validation
+  library.
+- One schema per form in `lib/schemas.ts`, named `<thing>Schema`. The messages
+  in the schema are the ones shown under the fields.
+- Check with `safeParse` on submit, never `parse` — a rejection is an expected
+  outcome here, not an exception.
+- Post `result.data`, not the raw state, so values arrive already trimmed.
+- Request and response body types come from `z.infer`, never typed a second
+  time by hand.
+- Turn a rejection into field messages with `fieldErrorsFrom` in `lib/forms.ts`;
+  `TextField` shows them.
+- The frontend rules mirror what the backend enforces. They are a convenience so
+  an obvious mistake is answered without a round trip — the backend is still the
+  real gate, and its `@NotBlank`/`@Size`/`@Email` stay the source of truth.
+
 ## Documentation lookups
 
 - The `context7` MCP server is configured. Use it to fetch current
@@ -77,8 +95,9 @@ Backend packages under `backend/src/main/java/com/roommind/`:
 Frontend under `frontend/src/`:
 
     lib/         api.ts (axios instance and error text), auth.ts (token
-                 storage), forms.ts (field-error state and shared checks)
-    pages/       LoginPage, RegisterPage — state, validation rules, submit
+                 storage), schemas.ts (zod rules per form), forms.ts
+                 (field-error state, zod issues to field messages)
+    pages/       LoginPage, RegisterPage — state, submit
     components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth
     App.tsx      the signed-in home page
 
@@ -139,5 +158,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   cache, since the backend holds no session.
 - `RequireAuth` wraps protected routes and calls `/api/auth/me` before rendering,
   so a token that expired between visits sends the person back to login.
+- Login and register are validated by `loginSchema` and `registerSchema` in
+  `lib/schemas.ts`. Response bodies are not validated yet; that arrives when an
+  endpoint returns something richer than a token.
 - Verification script for the whole auth flow lives in the session scratchpad,
   not the repo. Rewrite it if it is needed again.

@@ -5,9 +5,12 @@ import FormMessage from '../components/FormMessage'
 import SubmitButton from '../components/SubmitButton'
 import TextField from '../components/TextField'
 import { api, errorMessage } from '../lib/api'
-import { isBlank, looksLikeEmail, useFieldErrors, type FieldErrors } from '../lib/forms'
+import { fieldErrorsFrom, isBlank, useFieldErrors } from '../lib/forms'
+import { registerSchema } from '../lib/schemas'
 
-type Field = 'email' | 'username' | 'password'
+// The field names, read off the schema rather than listed again here, so a
+// renamed rule cannot leave a stale name behind.
+type Field = keyof typeof registerSchema.shape
 
 /**
  * Creating an account. The backend deliberately does not hand back a token
@@ -25,52 +28,30 @@ function RegisterPage() {
   const { errors, setErrors, clear } = useFieldErrors<Field>()
 
   // Whether the button is worth pressing. Only emptiness is checked here; the
-  // length rules below stay in validate() so that a too-short password can be
+  // length rules stay in the schema so that a too-short password can be
   // submitted and explained rather than silently refusing to go anywhere.
   const incomplete = isBlank(email) || isBlank(username) || password === ''
-
-  // The same limits the backend enforces, checked here so an obvious mistake is
-  // answered immediately instead of after a round trip. The backend still checks
-  // everything itself; this is a convenience, not the real gate.
-  function validate(): FieldErrors<Field> {
-    const found: FieldErrors<Field> = {}
-
-    if (isBlank(email)) {
-      found.email = 'Enter an email address.'
-    } else if (!looksLikeEmail(email)) {
-      found.email = 'That does not look like an email address.'
-    }
-
-    if (isBlank(username)) {
-      found.username = 'Choose a username.'
-    } else if (username.trim().length < 3) {
-      found.username = 'At least 3 characters.'
-    }
-
-    if (password === '') {
-      found.password = 'Choose a password.'
-    } else if (password.length < 8) {
-      found.password = 'At least 8 characters.'
-    }
-
-    return found
-  }
 
   async function handleSubmit(event: FormEvent) {
     // Without this the browser reloads the page on submit and the request is lost.
     event.preventDefault()
     setError(null)
 
-    const found = validate()
-    setErrors(found)
-    if (Object.keys(found).length > 0) {
+    // safeParse checks what was typed against registerSchema and hands back the
+    // verdict instead of throwing: either the accepted values, or a list of
+    // everything wrong with them. What counts as wrong lives in lib/schemas.ts.
+    const checked = registerSchema.safeParse({ email, username, password })
+    if (!checked.success) {
+      setErrors(fieldErrorsFrom<Field>(checked.error))
       return
     }
+    setErrors({})
 
     setSubmitting(true)
 
     try {
-      await api.post('/api/auth/register', { email, username, password })
+      // checked.data, not the raw state, so the email and username go up trimmed.
+      await api.post('/api/auth/register', checked.data)
       navigate('/login', { state: { justRegistered: true } })
     } catch (caught) {
       setError(errorMessage(caught, 'Could not create the account.'))
