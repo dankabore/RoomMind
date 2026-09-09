@@ -67,10 +67,11 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig
-    controller/  AuthController, HealthController
-    service/     AuthService, JwtService
+    controller/  AuthController, HealthController, UserController
+    service/     AuthService, JwtService, UserService
     repository/  UserRepository
-    dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse
+    dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
+                 PersonResponse
     entity/      User
     mapper/      UserMapper
 
@@ -78,7 +79,8 @@ Frontend under `frontend/src/`:
 
     lib/         api.ts (axios instance and error text), auth.ts (token
                  storage), forms.ts (field-error state and shared checks)
-    pages/       LoginPage, RegisterPage — state, validation rules, submit
+    pages/       LoginPage, RegisterPage — state, validation rules, submit;
+                 PeoplePage — the searchable list of everyone
     components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth
     App.tsx      the signed-in home page
 
@@ -117,7 +119,9 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Phase 1 done: both servers run, `/api/health` reports database connectivity,
   CORS allows the Vite origin.
 - Phase 2 done: register, login, logout and `/api/auth/me` work end to end.
-  Chat conversations and messages are the next feature.
+- Phase 3 started with the people feature: `GET /api/users` lists every other
+  account alphabetically and narrows to usernames starting with `?search=`.
+  Conversations and messages are the next feature.
 - `V1__create_users_table.sql` is the only migration: id, email, username,
   password hash, created at. Display name and language arrive with the profile
   feature. `ddl-auto=validate`, so entities must match migrations.
@@ -126,7 +130,13 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the
   way back in. No refresh tokens; the user decided against them.
 - Open endpoints: `/api/health`, `POST /api/auth/register`, `POST /api/auth/login`,
-  and the `ERROR` dispatch. Everything else needs a bearer token.
+  and the `ERROR` dispatch. Everything else needs a bearer token, `/api/users`
+  included — no rule was added for it.
+- `PersonResponse` is how other people appear: id and username only. Everyone
+  signed in can read that list, so it must not carry emails the way
+  `UserResponse` does.
+- The people list is unpaginated. Pagination arrives when the message history
+  needs a cursor, not before.
 - Token validation is Spring Security's `oauth2ResourceServer`, not a
   hand-written filter. There is no `UserDetailsService` or
   `AuthenticationProvider`: `AuthService` checks the password itself.

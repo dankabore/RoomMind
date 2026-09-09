@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from './lib/api'
 import { clearToken } from './lib/auth'
 
@@ -73,6 +73,16 @@ function App() {
             {user ? `Signed in as ${user.username}` : 'Phase 1 — the project runs locally'}
           </p>
         </div>
+
+        <Link
+          to="/people"
+          className="mt-6 flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 text-sm font-medium text-slate-900 hover:border-slate-300 hover:bg-slate-50"
+        >
+          People
+          <span className="text-slate-400" aria-hidden="true">
+            &rarr;
+          </span>
+        </Link>
 
         <div className="mt-6 space-y-2 text-sm">
           {isPending && <p className="text-slate-500">Checking the backend…</p>}
