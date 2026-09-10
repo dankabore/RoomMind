@@ -1,0 +1,56 @@
+package com.roommind.entity;
+
+import java.time.Instant;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+/**
+ * One person's place in one conversation. This is the row every permission
+ * check in the feature comes down to: if it is missing, you cannot read the
+ * conversation or post to it.
+ *
+ * It is a real entity rather than a many-to-many mapping between Conversation
+ * and User, because a plain many-to-many can only record that a link exists.
+ * This table also has to say when someone joined, and the group-chat phase adds
+ * whether they are the admin.
+ *
+ * Both links are LAZY: loading a membership row to answer "is this person
+ * allowed in" should not drag the conversation and the account along with it.
+ */
+@Entity
+@Table(name = "conversation_members")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ConversationMember {
+
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "conversation_id", nullable = false)
+	private Conversation conversation;
+
+	@ManyToOne(fetch = FetchType.LAZY, optional = false)
+	@JoinColumn(name = "user_id", nullable = false)
+	private User user;
+
+	@Column(name = "joined_at", nullable = false)
+	private Instant joinedAt;
+}

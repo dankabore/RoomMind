@@ -67,13 +67,17 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig
-    controller/  AuthController, HealthController, UserController
-    service/     AuthService, JwtService, UserService
-    repository/  UserRepository
+    controller/  AuthController, HealthController, UserController,
+                 ConversationController, MessageController
+    service/     AuthService, JwtService, UserService, ConversationService,
+                 MessageService
+    repository/  UserRepository, ConversationRepository,
+                 ConversationMemberRepository, MessageRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
-                 PersonResponse
-    entity/      User
-    mapper/      UserMapper
+                 PersonResponse, OpenDirectRequest, ConversationResponse,
+                 SendMessageRequest, MessageResponse
+    entity/      User, Conversation, ConversationMember, Message
+    mapper/      UserMapper, MessageMapper
 
 Frontend under `frontend/src/`:
 
@@ -119,12 +123,18 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Phase 1 done: both servers run, `/api/health` reports database connectivity,
   CORS allows the Vite origin.
 - Phase 2 done: register, login, logout and `/api/auth/me` work end to end.
-- Phase 3 started with the people feature: `GET /api/users` lists every other
-  account alphabetically and narrows to usernames starting with `?search=`.
-  Conversations and messages are the next feature.
-- `V1__create_users_table.sql` is the only migration: id, email, username,
-  password hash, created at. Display name and language arrive with the profile
-  feature. `ddl-auto=validate`, so entities must match migrations.
+- Phase 3 people feature: `GET /api/users` lists every other account
+  alphabetically and narrows to usernames starting with `?search=`.
+- Phase 3 messaging backend: `POST /api/conversations/direct` opens (and on
+  first use creates) the one-to-one conversation with someone,
+  `POST /api/conversations/{id}/messages` sends, and `GET` on the same path
+  reads a page. The chat screen and the dashboard list are still to build.
+- Migrations: `V1__create_users_table.sql` (id, email, username, password
+  hash, created at) and `V2__create_conversations_and_messages.sql`
+  (conversations, conversation_members, messages). Display name and language
+  arrive with the profile feature; conversation type, group name and member
+  role arrive with group chats. `ddl-auto=validate`, so entities must match
+  migrations.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the
@@ -135,8 +145,26 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - `PersonResponse` is how other people appear: id and username only. Everyone
   signed in can read that list, so it must not carry emails the way
   `UserResponse` does.
-- The people list is unpaginated. Pagination arrives when the message history
-  needs a cursor, not before.
+- The people list is unpaginated. Message history is: 50 per read, walked
+  backwards with `?before=<oldest message id on screen>`. Paging on the id
+  rather than an offset means new arrivals cannot shift the window and
+  duplicate or skip a message.
+- `ConversationService.requireMember` guards every endpoint that touches a
+  conversation's contents, and answers **404, not 403** — a 403 would confirm
+  the conversation exists and let someone map out who talks to whom by trying
+  ids.
+- `findDirectBetween` requires a member count of exactly two, so a group
+  containing both people can never be mistaken for their private conversation.
+- Messages must be loaded with the sender joined in (`join fetch m.sender`).
+  `MessageMapper` reads the sender's name through that link, so without the
+  join a 50-message page becomes 51 queries. Measured: a 30-message read is
+  2 queries.
+- `POST /api/conversations/direct` answers 200, not the usual 201-on-create,
+  because it is find-or-create and the caller does not act differently on
+  whether a row was written.
+- Opening a conversation creates it even if nothing is ever sent. The
+  dashboard's conversation list should therefore skip conversations with no
+  messages.
 - Token validation is Spring Security's `oauth2ResourceServer`, not a
   hand-written filter. There is no `UserDetailsService` or
   `AuthenticationProvider`: `AuthService` checks the password itself.
