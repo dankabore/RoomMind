@@ -1,12 +1,15 @@
 package com.roommind.mapper;
 
+import java.util.List;
+
+import com.roommind.dto.PersonResponse;
 import com.roommind.dto.UserResponse;
 import com.roommind.entity.User;
 
 import org.mapstruct.Mapper;
 
 /**
- * Turns a User into the shape the API returns. Every field is a straight copy,
+ * Turns a User into the shapes the API returns. Every field is a straight copy,
  * which is exactly the case MapStruct is for — it writes the implementation at
  * compile time, so a field added to one side and forgotten on the other becomes
  * a build warning instead of a silently missing value in the JSON.
@@ -19,4 +22,13 @@ import org.mapstruct.Mapper;
 public interface UserMapper {
 
 	UserResponse toResponse(User user);
+
+	PersonResponse toPersonResponse(User user);
+
+	/**
+	 * MapStruct writes the loop for this from the single-item method above, so
+	 * the list version costs nothing to have and keeps the service free of a
+	 * stream and a collector.
+	 */
+	List<PersonResponse> toPersonResponses(List<User> users);
 }

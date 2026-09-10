@@ -41,13 +41,13 @@ the one above it runs.
 
 - [ ] Migration: `conversations`, `conversation_members`, `messages`
 - [ ] Entities and repositories
-- [ ] People endpoint: list users, prefix search by username, exclude self
+- [x] People endpoint: list users, prefix search by username, exclude self
 - [ ] Endpoint to open a direct conversation, creating it on first message
 - [ ] Send message endpoint
 - [ ] Fetch messages endpoint, paginated, 50 per page, oldest-scroll cursor
 - [ ] Conversation list endpoint with last message preview
 - [ ] Membership check on every conversation endpoint
-- [ ] React: people page with search
+- [x] React: people page with search
 - [ ] React: dashboard listing recent conversations
 - [ ] React: chat view with message list and input
 - [ ] React: load older messages on scroll up

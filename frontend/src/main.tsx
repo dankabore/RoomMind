@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import RequireAuth from './components/RequireAuth'
 import LoginPage from './pages/LoginPage'
+import PeoplePage from './pages/PeoplePage'
 import RegisterPage from './pages/RegisterPage'
 import './index.css'
 
@@ -22,6 +23,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             element={
               <RequireAuth>
                 <App />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/people"
+            element={
+              <RequireAuth>
+                <PeoplePage />
               </RequireAuth>
             }
           />
