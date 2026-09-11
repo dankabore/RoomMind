@@ -49,8 +49,8 @@ the one above it runs.
 - [x] Membership check on every conversation endpoint
 - [x] React: people page with search
 - [ ] React: dashboard listing recent conversations
-- [ ] React: chat view with message list and input
-- [ ] React: load older messages on scroll up
+- [x] React: chat view with message list and input
+- [x] React: load older messages on scroll up
 
 ## Phase 4 — Messages arrive live
 

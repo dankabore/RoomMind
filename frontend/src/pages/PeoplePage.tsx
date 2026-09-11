@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import Avatar from '../components/Avatar'
 import { api, errorMessage } from '../lib/api'
 
 type Person = {
@@ -39,8 +40,11 @@ function PeoplePage() {
   const settling = search !== debouncedSearch
 
   return (
-    <div className="min-h-screen bg-slate-100 p-6">
-      <div className="mx-auto w-full max-w-2xl">
+    // Exactly one screen tall, never taller. The heading and search box keep
+    // their size and the list gets what is left, so a long list scrolls inside
+    // its own box instead of pushing the search box off the top of the page.
+    <div className="flex h-screen flex-col bg-slate-100 p-6">
+      <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col">
         <div className="flex items-baseline justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">People</h1>
@@ -62,7 +66,10 @@ function PeoplePage() {
           className="mt-6 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 outline-none focus:border-slate-900"
         />
 
-        <div className="mt-4 rounded-xl bg-white p-2 shadow">
+        {/* min-h-0 is what lets this box shrink below the height of its
+            contents; without it the list stretches the page as before. It still
+            only grows as tall as it needs to, so three people make a short box. */}
+        <div className="mt-4 min-h-0 overflow-y-auto rounded-xl bg-white p-2 shadow">
           {(isPending || settling) && <p className="p-4 text-sm text-slate-500">Loading…</p>}
 
           {isError && !settling && (
@@ -82,15 +89,17 @@ function PeoplePage() {
           {people && !settling && people.length > 0 && (
             <ul>
               {people.map((person) => (
-                <li
-                  key={person.id}
-                  className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-slate-50"
-                >
-                  {/* Stands in for a profile picture until there is one to show. */}
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-sm font-medium uppercase text-slate-600">
-                    {person.username.charAt(0)}
-                  </span>
-                  <span className="text-sm font-medium text-slate-900">{person.username}</span>
+                <li key={person.id}>
+                  {/* The whole row is the link, so the target is as big as it
+                      looks rather than just the name. The address names the
+                      person; the conversation is found or started on arrival. */}
+                  <Link
+                    to={`/chat/${person.id}`}
+                    className="flex items-center gap-3 rounded-lg px-4 py-3 hover:bg-slate-50"
+                  >
+                    <Avatar name={person.username} />
+                    <span className="text-sm font-medium text-slate-900">{person.username}</span>
+                  </Link>
                 </li>
               ))}
             </ul>

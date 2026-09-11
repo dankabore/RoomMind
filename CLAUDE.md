@@ -82,10 +82,15 @@ Backend packages under `backend/src/main/java/com/roommind/`:
 Frontend under `frontend/src/`:
 
     lib/         api.ts (axios instance and error text), auth.ts (token
-                 storage), forms.ts (field-error state and shared checks)
+                 storage), forms.ts (field-error state and shared checks),
+                 chat.ts (chat types and the hooks that fetch, page and send)
     pages/       LoginPage, RegisterPage — state, validation rules, submit;
-                 PeoplePage — the searchable list of everyone
-    components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth
+                 PeoplePage — the searchable list of everyone;
+                 ChatPage — one conversation, at /chat/<other user id>; only
+                 resolves the conversation and wires lib/chat to components
+    components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth,
+                 Avatar, ChatHeader, MessageList (owns the scroll
+                 corrections), MessageComposer (owns the draft text)
     App.tsx      the signed-in home page
 
 Migrations live in `backend/src/main/resources/db/migration/`.
@@ -128,7 +133,17 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Phase 3 messaging backend: `POST /api/conversations/direct` opens (and on
   first use creates) the one-to-one conversation with someone,
   `POST /api/conversations/{id}/messages` sends, and `GET` on the same path
-  reads a page. The chat screen and the dashboard list are still to build.
+  reads a page.
+- Phase 3 chat screen: clicking someone on the people page opens
+  `/chat/<their user id>`. The route names the person, not the
+  conversation, because the conversation may not exist until the page
+  opens — that keeps the URL reloadable without a lookup endpoint.
+- Scrollback uses `useInfiniteQuery`. Its "next page" means further back in
+  time; pages arrive newest-first and are reversed for display. A sent
+  message is pushed into the cache rather than triggering a refetch, since
+  refetching an infinite query re-requests every page it holds.
+- Still to build in Phase 3: the conversation list endpoint and the
+  dashboard of recent conversations.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at) and `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages). Display name and language
