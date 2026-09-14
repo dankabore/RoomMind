@@ -45,7 +45,7 @@ the one above it runs.
 - [x] Endpoint to open a direct conversation, creating it on first message
 - [x] Send message endpoint
 - [x] Fetch messages endpoint, paginated, 50 per page, oldest-scroll cursor
-- [ ] Conversation list endpoint with last message preview
+- [x] Conversation list endpoint with last message preview
 - [x] Membership check on every conversation endpoint
 - [x] React: people page with search
 - [ ] React: dashboard listing recent conversations

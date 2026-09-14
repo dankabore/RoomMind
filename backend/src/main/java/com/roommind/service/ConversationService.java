@@ -1,15 +1,22 @@
 package com.roommind.service;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import com.roommind.dto.ConversationResponse;
+import com.roommind.dto.ConversationSummaryResponse;
 import com.roommind.dto.OpenDirectRequest;
 import com.roommind.entity.Conversation;
 import com.roommind.entity.ConversationMember;
+import com.roommind.entity.Message;
 import com.roommind.entity.User;
+import com.roommind.mapper.MessageMapper;
 import com.roommind.mapper.UserMapper;
 import com.roommind.repository.ConversationMemberRepository;
 import com.roommind.repository.ConversationRepository;
+import com.roommind.repository.MessageRepository;
 import com.roommind.repository.UserRepository;
 
 import org.springframework.http.HttpStatus;
@@ -20,7 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Opening conversations, and deciding who is allowed into one.
+ * Opening conversations, listing them, and deciding who is allowed into one.
  */
 @Service
 @RequiredArgsConstructor
@@ -32,7 +39,11 @@ public class ConversationService {
 
 	private final UserRepository userRepository;
 
+	private final MessageRepository messageRepository;
+
 	private final UserMapper userMapper;
+
+	private final MessageMapper messageMapper;
 
 	/**
 	 * Hands back the conversation between the caller and one other person,
@@ -65,6 +76,47 @@ public class ConversationService {
 			.id(conversation.getId())
 			.otherUser(userMapper.toPersonResponse(otherUser))
 			.build();
+	}
+
+	/**
+	 * The caller's conversations for the dashboard, most recently active first,
+	 * each with the person on the other side and the last thing said.
+	 *
+	 * Two queries however many conversations there are: the latest message in
+	 * each, then the people on the other side of all of them. Asking once per
+	 * conversation instead would cost two queries for every row on the screen.
+	 *
+	 * Conversations opened but never written in are left out, because the
+	 * latest-message query has nothing to return for them.
+	 */
+	public List<ConversationSummaryResponse> listFor(String subject) {
+		Long userId = Long.valueOf(subject);
+
+		List<Message> latestMessages = messageRepository.findLatestInEachConversationOf(userId);
+		if (latestMessages.isEmpty()) {
+			// Also spares the database a question about an empty list of ids.
+			return List.of();
+		}
+
+		List<Long> conversationIds = latestMessages.stream()
+			.map(message -> message.getConversation().getId())
+			.toList();
+
+		// Keyed by conversation, so each row below can find its person. toMap
+		// refuses two people for one conversation, which is right while every
+		// conversation is direct. Group chats will need their own shape here
+		// rather than a single "other user", and this is where that shows up.
+		Map<Long, User> otherUsers = conversationMemberRepository.findOtherMembers(conversationIds, userId)
+			.stream()
+			.collect(Collectors.toMap(member -> member.getConversation().getId(), ConversationMember::getUser));
+
+		return latestMessages.stream()
+			.map(message -> ConversationSummaryResponse.builder()
+				.id(message.getConversation().getId())
+				.otherUser(userMapper.toPersonResponse(otherUsers.get(message.getConversation().getId())))
+				.lastMessage(messageMapper.toResponse(message))
+				.build())
+			.toList();
 	}
 
 	/**

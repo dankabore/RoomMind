@@ -1,12 +1,16 @@
 package com.roommind.controller;
 
+import java.util.List;
+
 import com.roommind.dto.ConversationResponse;
+import com.roommind.dto.ConversationSummaryResponse;
 import com.roommind.dto.OpenDirectRequest;
 import com.roommind.service.ConversationService;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +25,15 @@ import lombok.RequiredArgsConstructor;
 public class ConversationController {
 
 	private final ConversationService conversationService;
+
+	/**
+	 * Your conversations, most recently active first, each with the last thing
+	 * said in it. This is what the dashboard lists.
+	 */
+	@GetMapping
+	public ResponseEntity<List<ConversationSummaryResponse>> list(@AuthenticationPrincipal Jwt jwt) {
+		return ResponseEntity.ok(conversationService.listFor(jwt.getSubject()));
+	}
 
 	/**
 	 * Opens the conversation with one other person, which is what clicking their

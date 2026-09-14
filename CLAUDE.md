@@ -75,7 +75,8 @@ Backend packages under `backend/src/main/java/com/roommind/`:
                  ConversationMemberRepository, MessageRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
                  PersonResponse, OpenDirectRequest, ConversationResponse,
-                 SendMessageRequest, MessageResponse
+                 SendMessageRequest, MessageResponse,
+                 ConversationSummaryResponse
     entity/      User, Conversation, ConversationMember, Message
     mapper/      UserMapper, MessageMapper
 
@@ -142,8 +143,16 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   time; pages arrive newest-first and are reversed for display. A sent
   message is pushed into the cache rather than triggering a refetch, since
   refetching an infinite query re-requests every page it holds.
-- Still to build in Phase 3: the conversation list endpoint and the
-  dashboard of recent conversations.
+- Phase 3 conversation list: `GET /api/conversations` returns the caller's
+  conversations, most recently active first, each with `otherUser` and the
+  whole `lastMessage` (the screen shortens it, not the API).
+- It is two queries however many conversations there are: the latest message
+  in each (`max(id)` grouped by conversation), then the other members of all
+  of them at once. Measured: 8 conversations, 2 queries.
+- `listFor` gathers the other members with `toMap`, which throws if one
+  conversation has two other people. Right while every conversation is
+  direct; group chats need their own shape there.
+- Still to build in Phase 3: the dashboard screen that shows this list.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at) and `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages). Display name and language
@@ -177,9 +186,9 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - `POST /api/conversations/direct` answers 200, not the usual 201-on-create,
   because it is find-or-create and the caller does not act differently on
   whether a row was written.
-- Opening a conversation creates it even if nothing is ever sent. The
-  dashboard's conversation list should therefore skip conversations with no
-  messages.
+- Opening a conversation creates it even if nothing is ever sent. The list
+  endpoint leaves those out: with no messages there is no latest message, so
+  they drop out of the query on their own.
 - Token validation is Spring Security's `oauth2ResourceServer`, not a
   hand-written filter. There is no `UserDetailsService` or
   `AuthenticationProvider`: `AuthService` checks the password itself.

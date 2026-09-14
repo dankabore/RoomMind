@@ -42,4 +42,27 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 		""")
 	List<Message> findOlderThan(@Param("conversationId") Long conversationId, @Param("before") Long before,
 			Limit limit);
+
+	/**
+	 * The newest message in every conversation this person belongs to, most
+	 * recent first. This is the dashboard: one row per conversation, ordered by
+	 * how recently anything was said in it.
+	 *
+	 * max(id) finds each conversation's latest message because ids only ever
+	 * increase. A conversation with no messages has no max, so it drops out on
+	 * its own — which keeps chats that were opened but never used off the list.
+	 */
+	@Query("""
+		select m from Message m
+		join fetch m.sender
+		where m.id in (
+			select max(m2.id) from Message m2
+			where m2.conversation.id in (
+				select cm.conversation.id from ConversationMember cm where cm.user.id = :userId
+			)
+			group by m2.conversation.id
+		)
+		order by m.id desc
+		""")
+	List<Message> findLatestInEachConversationOf(@Param("userId") Long userId);
 }
