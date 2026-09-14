@@ -67,22 +67,35 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig
-    controller/  AuthController, HealthController, UserController
-    service/     AuthService, JwtService, UserService
-    repository/  UserRepository
+    controller/  AuthController, HealthController, UserController,
+                 ConversationController, MessageController
+    service/     AuthService, JwtService, UserService, ConversationService,
+                 MessageService
+    repository/  UserRepository, ConversationRepository,
+                 ConversationMemberRepository, MessageRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
-                 PersonResponse
-    entity/      User
-    mapper/      UserMapper
+                 PersonResponse, OpenDirectRequest, ConversationResponse,
+                 SendMessageRequest, MessageResponse,
+                 ConversationSummaryResponse
+    entity/      User, Conversation, ConversationMember, Message
+    mapper/      UserMapper, MessageMapper
 
 Frontend under `frontend/src/`:
 
     lib/         api.ts (axios instance and error text), auth.ts (token
-                 storage), forms.ts (field-error state and shared checks)
-    pages/       LoginPage, RegisterPage — state, validation rules, submit;
-                 PeoplePage — the searchable list of everyone
-    components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth
-    App.tsx      the signed-in home page
+                 storage), forms.ts (field-error state and shared checks),
+                 chat.ts (chat types and the hooks that list, fetch, page
+                 and send)
+    pages/       DashboardPage — the signed-in home page at /, your
+                 conversations with a last-message preview;
+                 LoginPage, RegisterPage — state, validation rules, submit;
+                 PeoplePage — the searchable list of everyone;
+                 ChatPage — one conversation, at /chat/<other user id>; only
+                 resolves the conversation and wires lib/chat to components
+    components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth,
+                 Avatar, ChatHeader, MessageList (owns the scroll
+                 corrections), MessageComposer (owns the draft text),
+                 LogoutButton (the button and its confirmation dialog)
 
 Migrations live in `backend/src/main/resources/db/migration/`.
 
@@ -117,14 +130,42 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 ## Current state
 
 - Phase 1 done: both servers run, `/api/health` reports database connectivity,
-  CORS allows the Vite origin.
+  CORS allows the Vite origin. The endpoint still exists, but the home page no
+  longer displays it — the dashboard replaced that card.
 - Phase 2 done: register, login, logout and `/api/auth/me` work end to end.
-- Phase 3 started with the people feature: `GET /api/users` lists every other
-  account alphabetically and narrows to usernames starting with `?search=`.
-  Conversations and messages are the next feature.
-- `V1__create_users_table.sql` is the only migration: id, email, username,
-  password hash, created at. Display name and language arrive with the profile
-  feature. `ddl-auto=validate`, so entities must match migrations.
+- Phase 3 people feature: `GET /api/users` lists every other account
+  alphabetically and narrows to usernames starting with `?search=`.
+- Phase 3 messaging backend: `POST /api/conversations/direct` opens (and on
+  first use creates) the one-to-one conversation with someone,
+  `POST /api/conversations/{id}/messages` sends, and `GET` on the same path
+  reads a page.
+- Phase 3 chat screen: clicking someone on the people page opens
+  `/chat/<their user id>`. The route names the person, not the
+  conversation, because the conversation may not exist until the page
+  opens — that keeps the URL reloadable without a lookup endpoint.
+- Scrollback uses `useInfiniteQuery`. Its "next page" means further back in
+  time; pages arrive newest-first and are reversed for display. A sent
+  message is pushed into the cache rather than triggering a refetch, since
+  refetching an infinite query re-requests every page it holds.
+- Phase 3 conversation list: `GET /api/conversations` returns the caller's
+  conversations, most recently active first, each with `otherUser` and the
+  whole `lastMessage` (the screen shortens it, not the API).
+- It is two queries however many conversations there are: the latest message
+  in each (`max(id)` grouped by conversation), then the other members of all
+  of them at once. Measured: 8 conversations, 2 queries.
+- `listFor` gathers the other members with `toMap`, which throws if one
+  conversation has two other people. Right while every conversation is
+  direct; group chats need their own shape there.
+- Phase 3 dashboard: `/` lists your conversations with the other person, the
+  time of the last message and its start (`You:` when you sent it). Rows link
+  to `/chat/<their user id>`, the same address the people page uses, and the
+  chat header's Back now returns to `/`. Phase 3 is complete.
+- Migrations: `V1__create_users_table.sql` (id, email, username, password
+  hash, created at) and `V2__create_conversations_and_messages.sql`
+  (conversations, conversation_members, messages). Display name and language
+  arrive with the profile feature; conversation type, group name and member
+  role arrive with group chats. `ddl-auto=validate`, so entities must match
+  migrations.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the
@@ -135,8 +176,26 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - `PersonResponse` is how other people appear: id and username only. Everyone
   signed in can read that list, so it must not carry emails the way
   `UserResponse` does.
-- The people list is unpaginated. Pagination arrives when the message history
-  needs a cursor, not before.
+- The people list is unpaginated. Message history is: 50 per read, walked
+  backwards with `?before=<oldest message id on screen>`. Paging on the id
+  rather than an offset means new arrivals cannot shift the window and
+  duplicate or skip a message.
+- `ConversationService.requireMember` guards every endpoint that touches a
+  conversation's contents, and answers **404, not 403** — a 403 would confirm
+  the conversation exists and let someone map out who talks to whom by trying
+  ids.
+- `findDirectBetween` requires a member count of exactly two, so a group
+  containing both people can never be mistaken for their private conversation.
+- Messages must be loaded with the sender joined in (`join fetch m.sender`).
+  `MessageMapper` reads the sender's name through that link, so without the
+  join a 50-message page becomes 51 queries. Measured: a 30-message read is
+  2 queries.
+- `POST /api/conversations/direct` answers 200, not the usual 201-on-create,
+  because it is find-or-create and the caller does not act differently on
+  whether a row was written.
+- Opening a conversation creates it even if nothing is ever sent. The list
+  endpoint leaves those out: with no messages there is no latest message, so
+  they drop out of the query on their own.
 - Token validation is Spring Security's `oauth2ResourceServer`, not a
   hand-written filter. There is no `UserDetailsService` or
   `AuthenticationProvider`: `AuthService` checks the password itself.

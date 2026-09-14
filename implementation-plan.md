@@ -39,18 +39,18 @@ the one above it runs.
 
 ## Phase 3 — Messages send and persist
 
-- [ ] Migration: `conversations`, `conversation_members`, `messages`
-- [ ] Entities and repositories
+- [x] Migration: `conversations`, `conversation_members`, `messages`
+- [x] Entities and repositories
 - [x] People endpoint: list users, prefix search by username, exclude self
-- [ ] Endpoint to open a direct conversation, creating it on first message
-- [ ] Send message endpoint
-- [ ] Fetch messages endpoint, paginated, 50 per page, oldest-scroll cursor
-- [ ] Conversation list endpoint with last message preview
-- [ ] Membership check on every conversation endpoint
+- [x] Endpoint to open a direct conversation, creating it on first message
+- [x] Send message endpoint
+- [x] Fetch messages endpoint, paginated, 50 per page, oldest-scroll cursor
+- [x] Conversation list endpoint with last message preview
+- [x] Membership check on every conversation endpoint
 - [x] React: people page with search
-- [ ] React: dashboard listing recent conversations
-- [ ] React: chat view with message list and input
-- [ ] React: load older messages on scroll up
+- [x] React: dashboard listing recent conversations
+- [x] React: chat view with message list and input
+- [x] React: load older messages on scroll up
 
 ## Phase 4 — Messages arrive live
 
