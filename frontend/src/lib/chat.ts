@@ -31,6 +31,13 @@ export type Message = {
   createdAt: string
 }
 
+/** One row of the dashboard: a conversation and the last thing said in it. */
+export type ConversationSummary = {
+  id: number
+  otherUser: Person
+  lastMessage: Message
+}
+
 // How the cache holds one conversation: a list of pages, each a list of
 // messages, plus the cursor that fetched each page.
 type MessagePages = InfiniteData<Message[], number | null>
@@ -39,6 +46,24 @@ type MessagePages = InfiniteData<Message[], number | null>
 // one place and the two cannot drift apart.
 function messagesKey(conversationId: number) {
   return ['messages', conversationId]
+}
+
+/**
+ * Your conversations, most recently active first. The backend already leaves
+ * out conversations that were opened but never written in, and already sorts
+ * them, so the screen can draw the list as it arrives.
+ *
+ * Coming back to the dashboard from a chat asks for the list again, which is
+ * what moves a conversation you just wrote in to the top.
+ */
+export function useConversations() {
+  return useQuery({
+    queryKey: ['conversations'],
+    queryFn: async () => {
+      const response = await api.get<ConversationSummary[]>('/api/conversations')
+      return response.data
+    },
+  })
 }
 
 /**

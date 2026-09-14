@@ -84,15 +84,18 @@ Frontend under `frontend/src/`:
 
     lib/         api.ts (axios instance and error text), auth.ts (token
                  storage), forms.ts (field-error state and shared checks),
-                 chat.ts (chat types and the hooks that fetch, page and send)
-    pages/       LoginPage, RegisterPage — state, validation rules, submit;
+                 chat.ts (chat types and the hooks that list, fetch, page
+                 and send)
+    pages/       DashboardPage — the signed-in home page at /, your
+                 conversations with a last-message preview;
+                 LoginPage, RegisterPage — state, validation rules, submit;
                  PeoplePage — the searchable list of everyone;
                  ChatPage — one conversation, at /chat/<other user id>; only
                  resolves the conversation and wires lib/chat to components
     components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth,
                  Avatar, ChatHeader, MessageList (owns the scroll
-                 corrections), MessageComposer (owns the draft text)
-    App.tsx      the signed-in home page
+                 corrections), MessageComposer (owns the draft text),
+                 LogoutButton (the button and its confirmation dialog)
 
 Migrations live in `backend/src/main/resources/db/migration/`.
 
@@ -127,7 +130,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 ## Current state
 
 - Phase 1 done: both servers run, `/api/health` reports database connectivity,
-  CORS allows the Vite origin.
+  CORS allows the Vite origin. The endpoint still exists, but the home page no
+  longer displays it — the dashboard replaced that card.
 - Phase 2 done: register, login, logout and `/api/auth/me` work end to end.
 - Phase 3 people feature: `GET /api/users` lists every other account
   alphabetically and narrows to usernames starting with `?search=`.
@@ -152,7 +156,10 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - `listFor` gathers the other members with `toMap`, which throws if one
   conversation has two other people. Right while every conversation is
   direct; group chats need their own shape there.
-- Still to build in Phase 3: the dashboard screen that shows this list.
+- Phase 3 dashboard: `/` lists your conversations with the other person, the
+  time of the last message and its start (`You:` when you sent it). Rows link
+  to `/chat/<their user id>`, the same address the people page uses, and the
+  chat header's Back now returns to `/`. Phase 3 is complete.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at) and `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages). Display name and language

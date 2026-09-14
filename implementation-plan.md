@@ -48,7 +48,7 @@ the one above it runs.
 - [x] Conversation list endpoint with last message preview
 - [x] Membership check on every conversation endpoint
 - [x] React: people page with search
-- [ ] React: dashboard listing recent conversations
+- [x] React: dashboard listing recent conversations
 - [x] React: chat view with message list and input
 - [x] React: load older messages on scroll up
 

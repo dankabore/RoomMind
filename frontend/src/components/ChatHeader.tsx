@@ -22,7 +22,7 @@ function ChatHeader({ other, me }: ChatHeaderProps) {
   return (
     <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-4">
       <div className="flex min-w-0 items-center gap-3">
-        <Link to="/people" className="text-sm font-medium text-slate-500 hover:text-slate-900">
+        <Link to="/" className="text-sm font-medium text-slate-500 hover:text-slate-900">
           Back
         </Link>
         <Avatar name={other.username} />
