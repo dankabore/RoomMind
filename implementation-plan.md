@@ -54,11 +54,11 @@ the one above it runs.
 
 ## Phase 4 — Messages arrive live
 
-- [ ] STOMP websocket config and endpoint
-- [ ] Read and verify the access token from the STOMP CONNECT frame
-- [ ] Reject the connection when the token is missing or invalid
-- [ ] Subscription interceptor rejecting non-members of a conversation
-- [ ] Broadcast each saved message to its conversation topic
+- [x] STOMP websocket config and endpoint
+- [x] Read and verify the access token from the STOMP CONNECT frame
+- [x] Reject the connection when the token is missing or invalid
+- [x] Subscription interceptor rejecting non-members of a conversation
+- [x] Broadcast each saved message to its conversation topic
 - [ ] React: connect to STOMP after login, passing the token
 - [ ] React: subscribe on opening a conversation, unsubscribe on leaving
 - [ ] React: append incoming messages

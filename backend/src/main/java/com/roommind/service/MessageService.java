@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
+import com.roommind.config.WebSocketConfig;
 import com.roommind.dto.MessageResponse;
 import com.roommind.dto.SendMessageRequest;
 import com.roommind.entity.Message;
@@ -15,6 +16,7 @@ import com.roommind.repository.UserRepository;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.http.HttpStatus;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -48,6 +50,10 @@ public class MessageService {
 
 	private final MessageMapper messageMapper;
 
+	// Publishes to a websocket address. Everyone subscribed to that address gets
+	// a copy; nobody else does.
+	private final SimpMessagingTemplate messagingTemplate;
+
 	public MessageResponse send(String subject, Long conversationId, SendMessageRequest request) {
 		Long senderId = Long.valueOf(subject);
 		conversationService.requireMember(conversationId, senderId);
@@ -70,7 +76,16 @@ public class MessageService {
 			.createdAt(Instant.now())
 			.build();
 
-		return messageMapper.toResponse(messageRepository.save(message));
+		MessageResponse response = messageMapper.toResponse(messageRepository.save(message));
+
+		// Pushed to everyone watching the conversation, the sender's own open
+		// connection included. It goes out after save has returned, so nobody is
+		// told about a message the database does not yet hold. If this method is
+		// ever made @Transactional, that stops being true: the push would leave
+		// before the commit and would need to wait for it.
+		messagingTemplate.convertAndSend(WebSocketConfig.CONVERSATION_TOPIC + conversationId, response);
+
+		return response;
 	}
 
 	/**
