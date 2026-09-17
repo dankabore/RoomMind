@@ -85,8 +85,9 @@ Frontend under `frontend/src/`:
 
     lib/         api.ts (axios instance and error text), auth.ts (token
                  storage), forms.ts (field-error state and shared checks),
-                 chat.ts (chat types and the hooks that list, fetch, page
-                 and send)
+                 chat.ts (chat types and the hooks that list, fetch, page,
+                 send and listen live), socket.ts (the one STOMP connection
+                 and the list of what open screens are subscribed to)
     pages/       DashboardPage — the signed-in home page at /, your
                  conversations with a last-message preview;
                  LoginPage, RegisterPage — state, validation rules, submit;
@@ -184,6 +185,32 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   `CorsConfig`, the same value the CORS rules use.
 - Verified with a hand-written STOMP script (scratchpad, not the repo): 11
   checks covering token, membership, forged SEND and wrong origin.
+- Phase 4 live frontend: `@stomp/stompjs` over a native websocket. One
+  connection per signed-in tab, a module-level client in `lib/socket.ts`.
+  `RequireAuth` opens it once `/api/auth/me` confirms the token (later calls
+  are no-ops); `LogoutButton` closes it. Leaving a page does not.
+- `beforeConnect` reads the token from storage on every attempt, reconnects
+  included, and stops trying if there is none.
+- The library reconnects every 5 s but forgets subscriptions, so `socket.ts`
+  keeps a list of listeners and resubscribes all of them on each connect.
+- `useLiveMessages` in `ChatView` listens to `/topic/conversations/<id>`. On
+  each (re)subscription it fetches the newest page and merges it, for messages
+  sent during the gap. More than 50 missed leaves a hole until reopened.
+- Every new message, sent or pushed, goes through `addMessage`, which skips
+  ids already cached. That is what keeps your own message from appearing
+  twice, since the backend pushes it back to you too.
+- `getNextPageParam` tests `>= 50`, not `=== 50`: page one grows as messages
+  are added, and exactly-fifty wrongly ended scrollback. This was a latent
+  Phase 3 bug that live messages made common.
+- `onStompError` calls `/api/auth/me`, so an expired token goes through the
+  existing 401-to-login handling. ERROR frames carry no reason to check.
+- No heartbeats: the simple broker has none configured, so a connection that
+  dies silently (no close event) is not noticed until the browser notices.
+  Configure broker heartbeats if that shows up.
+- The dashboard is not live; it refetches when you return to it.
+- Verified with a Node harness (scratchpad) rendering the real hooks against
+  the backend, including a backend restart: 12 checks. A deliberately broken
+  copy failed the five aimed at dedupe, ordering, scrollback and catch-up.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at) and `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages). Display name and language

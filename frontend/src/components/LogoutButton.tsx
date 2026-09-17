@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { clearToken } from '../lib/auth'
+import { disconnectSocket } from '../lib/socket'
 
 /**
  * The log out button and the "are you sure?" question it asks first. Kept
@@ -18,6 +19,9 @@ function LogoutButton() {
   // recorded there and there is no session to end.
   function handleLogout() {
     clearToken()
+    // The connection was opened as this person. Left open, it would keep
+    // delivering their messages after they had gone.
+    disconnectSocket()
     // Otherwise the cached "me" answer, and now the conversation list, would
     // still be sitting there for the next person who signs in on this browser.
     queryClient.clear()

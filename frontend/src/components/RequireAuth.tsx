@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { clearToken, getToken } from '../lib/auth'
+import { connectSocket } from '../lib/socket'
 
 /**
  * Wraps the pages that only make sense when signed in. Having a token is not
@@ -24,6 +25,17 @@ function RequireAuth({ children }: { children: ReactNode }) {
     // A rejected token is not going to be accepted on a second attempt.
     retry: false,
   })
+
+  // The live connection opens once the backend has confirmed the token, not
+  // merely because one is stored. Every signed-in page passes through here, but
+  // only the first call opens anything; later ones find it already open. It is
+  // closed on logout, not when a page is left, so moving between pages keeps
+  // the same connection.
+  useEffect(() => {
+    if (user) {
+      connectSocket()
+    }
+  }, [user])
 
   if (!hasToken) {
     return <Navigate to="/login" replace />
