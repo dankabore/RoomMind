@@ -6,7 +6,7 @@ import MessageComposer from '../components/MessageComposer'
 import MessageList from '../components/MessageList'
 import { api, errorMessage } from '../lib/api'
 import type { Conversation, Person } from '../lib/chat'
-import { useDirectConversation, useMessages, useSendMessage } from '../lib/chat'
+import { useDirectConversation, useLiveMessages, useMessages, useSendMessage } from '../lib/chat'
 
 /**
  * One conversation with one person.
@@ -62,6 +62,7 @@ function ChatView({ conversation }: { conversation: Conversation }) {
   })
 
   const history = useMessages(conversation.id)
+  useLiveMessages(conversation.id)
   const sendMessage = useSendMessage(conversation.id)
   const otherUsername = conversation.otherUser.username
 

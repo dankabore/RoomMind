@@ -4,7 +4,6 @@ import java.util.List;
 
 import jakarta.servlet.DispatcherType;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -32,8 +31,7 @@ public class SecurityConfig {
 
 	private final JwtConfig jwtConfig;
 
-	@Value("${app.cors.allowed-origin}")
-	private String allowedOrigin;
+	private final CorsConfig corsConfig;
 
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -47,6 +45,10 @@ public class SecurityConfig {
 				// a token, so a 400 or 409 would leave here as a 401.
 				.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 				.requestMatchers("/api/health").permitAll()
+				// The websocket handshake. Browsers cannot put an Authorization header
+				// on it, so the token is checked one step later instead, on the STOMP
+				// CONNECT frame — see StompAuthInterceptor.
+				.requestMatchers("/ws").permitAll()
 				.requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
 				.anyRequest().authenticated())
 			// Reads the bearer token off the Authorization header, checks its
@@ -59,7 +61,7 @@ public class SecurityConfig {
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration config = new CorsConfiguration();
-		config.setAllowedOrigins(List.of(allowedOrigin));
+		config.setAllowedOrigins(List.of(corsConfig.getAllowedOrigin()));
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 		config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
 

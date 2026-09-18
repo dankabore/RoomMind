@@ -66,7 +66,8 @@ Boot backend, React frontend, PostgreSQL.
 
 Backend packages under `backend/src/main/java/com/roommind/`:
 
-    config/      SecurityConfig, JwtConfig
+    config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
+                 StompAuthInterceptor
     controller/  AuthController, HealthController, UserController,
                  ConversationController, MessageController
     service/     AuthService, JwtService, UserService, ConversationService,
@@ -84,8 +85,9 @@ Frontend under `frontend/src/`:
 
     lib/         api.ts (axios instance and error text), auth.ts (token
                  storage), forms.ts (field-error state and shared checks),
-                 chat.ts (chat types and the hooks that list, fetch, page
-                 and send)
+                 chat.ts (chat types and the hooks that list, fetch, page,
+                 send and listen live), socket.ts (the one STOMP connection
+                 and the list of what open screens are subscribed to)
     pages/       DashboardPage — the signed-in home page at /, your
                  conversations with a last-message preview;
                  LoginPage, RegisterPage — state, validation rules, submit;
@@ -160,6 +162,55 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   time of the last message and its start (`You:` when you sent it). Rows link
   to `/chat/<their user id>`, the same address the people page uses, and the
   chat header's Back now returns to `/`. Phase 3 is complete.
+- Phase 4 live backend: STOMP over a plain websocket at `/ws` (no SockJS),
+  in-memory simple broker on `/topic`. Each saved message is pushed to
+  `/topic/conversations/<id>` as the same `MessageResponse` the POST returns.
+- `/ws` is `permitAll` in the HTTP security chain because browsers cannot set
+  headers on the handshake. The token arrives as an `Authorization: Bearer`
+  header on the STOMP CONNECT frame instead, checked by the same `JwtDecoder`.
+- `StompAuthInterceptor` is a plain `ChannelInterceptor`, not Spring Security's
+  websocket module: that module is not installed and forces CSRF tokens on
+  CONNECT. It refuses CONNECT without a valid token, SUBSCRIBE to anything but
+  a conversation the caller belongs to, and every client SEND — sending stays
+  on the POST endpoint, and an open SEND would let clients publish forged
+  messages straight to a topic.
+- A refused frame gets a STOMP ERROR and the connection closes. The ERROR says
+  only "Failed to send message"; the interceptor's reasons do not reach the
+  client. A custom error handler would pass them on, if the client needs them.
+- The token is checked once, at CONNECT. A socket outlives its token's expiry
+  until it drops; the reconnect needs a fresh token.
+- The push happens after `save` returns, so it follows the commit. If
+  `MessageService.send` becomes `@Transactional`, it must wait for the commit.
+- The websocket origin check reads `app.cors.allowed-origin` through
+  `CorsConfig`, the same value the CORS rules use.
+- Verified with a hand-written STOMP script (scratchpad, not the repo): 11
+  checks covering token, membership, forged SEND and wrong origin.
+- Phase 4 live frontend: `@stomp/stompjs` over a native websocket. One
+  connection per signed-in tab, a module-level client in `lib/socket.ts`.
+  `RequireAuth` opens it once `/api/auth/me` confirms the token (later calls
+  are no-ops); `LogoutButton` closes it. Leaving a page does not.
+- `beforeConnect` reads the token from storage on every attempt, reconnects
+  included, and stops trying if there is none.
+- The library reconnects every 5 s but forgets subscriptions, so `socket.ts`
+  keeps a list of listeners and resubscribes all of them on each connect.
+- `useLiveMessages` in `ChatView` listens to `/topic/conversations/<id>`. On
+  each (re)subscription it fetches the newest page and merges it, for messages
+  sent during the gap. More than 50 missed leaves a hole until reopened.
+- Every new message, sent or pushed, goes through `addMessage`, which skips
+  ids already cached. That is what keeps your own message from appearing
+  twice, since the backend pushes it back to you too.
+- `getNextPageParam` tests `>= 50`, not `=== 50`: page one grows as messages
+  are added, and exactly-fifty wrongly ended scrollback. This was a latent
+  Phase 3 bug that live messages made common.
+- `onStompError` calls `/api/auth/me`, so an expired token goes through the
+  existing 401-to-login handling. ERROR frames carry no reason to check.
+- No heartbeats: the simple broker has none configured, so a connection that
+  dies silently (no close event) is not noticed until the browser notices.
+  Configure broker heartbeats if that shows up.
+- The dashboard is not live; it refetches when you return to it.
+- Verified with a Node harness (scratchpad) rendering the real hooks against
+  the backend, including a backend restart: 12 checks. A deliberately broken
+  copy failed the five aimed at dedupe, ordering, scrollback and catch-up.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at) and `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages). Display name and language
