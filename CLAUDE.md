@@ -22,7 +22,9 @@ Boot backend, React frontend, PostgreSQL.
 ## Backend conventions
 
 - Packages by layer under `com.roommind`: `config`, `controller`, `service`,
-  `repository`, `dto`, `entity`, `mapper`. No feature-named packages.
+  `repository`, `dto`, `entity`, `enums`, `mapper`. No feature-named packages.
+  Every enum lives in `enums`, whatever it belongs to — none are nested in the
+  entity or DTO that uses them.
 - Lombok for boilerplate: `@Getter`/`@Setter`/`@Builder`, and
   `@RequiredArgsConstructor` for injection instead of written constructors.
 - No `@Data` on entities (its `equals`/`hashCode` covers database-assigned ids)
@@ -77,8 +79,10 @@ Backend packages under `backend/src/main/java/com/roommind/`:
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
                  PersonResponse, OpenDirectRequest, ConversationResponse,
                  SendMessageRequest, MessageResponse,
-                 ConversationSummaryResponse
+                 ConversationSummaryResponse, CreateGroupRequest,
+                 AddMemberRequest, GroupResponse, GroupMemberResponse
     entity/      User, Conversation, ConversationMember, Message
+    enums/       ConversationType, MemberRole
     mapper/      UserMapper, MessageMapper
 
 Frontend under `frontend/src/`:
@@ -156,8 +160,9 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   in each (`max(id)` grouped by conversation), then the other members of all
   of them at once. Measured: 8 conversations, 2 queries.
 - `listFor` gathers the other members with `toMap`, which throws if one
-  conversation has two other people. Right while every conversation is
-  direct; group chats need their own shape there.
+  conversation has two other people. The dashboard query now asks for direct
+  conversations only, so that cannot happen; groups need their own row shape
+  before they can appear there.
 - Phase 3 dashboard: `/` lists your conversations with the other person, the
   time of the last message and its start (`You:` when you sent it). Rows link
   to `/chat/<their user id>`, the same address the people page uses, and the
@@ -211,12 +216,35 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Verified with a Node harness (scratchpad) rendering the real hooks against
   the backend, including a backend restart: 12 checks. A deliberately broken
   copy failed the five aimed at dedupe, ordering, scrollback and catch-up.
+- Phase 5 group backend: `POST /api/conversations/groups` creates a group with
+  the caller as admin, `POST /api/conversations/{id}/members` adds someone and
+  `DELETE /api/conversations/{id}/members/{userId}` removes them, both admin
+  only. Add and remove answer with the whole group so the screen can redraw its
+  member list from the reply.
+- `conversations.type` is `DIRECT` or `GROUP` and `conversation_members.role`
+  is `ADMIN` or `MEMBER`, both `@Enumerated(STRING)` with check constraints in
+  the migration. A group has a name; a direct conversation must not, since its
+  name is whoever is reading it.
+- `findDirectBetween` now also requires `type = DIRECT`. The member count of
+  two alone stopped being enough the moment two-person groups were possible.
+- `requireGroupAdmin` answers 404 to a stranger (same reason as
+  `requireMember`), 403 to a member who is not the admin, and 400 when pointed
+  at a direct conversation.
+- The admin cannot remove themselves — that is the leave endpoint's job, and it
+  is not written yet. Adding someone already in the group is 409, not a silent
+  success. Removing someone leaves their messages in place.
+- Nothing enforces one admin per group in the database. A partial unique index
+  would make the coming transfer endpoint order-dependent, so the rule lives in
+  the service.
+- Verified against a running backend with a curl script (scratchpad): 23 checks
+  covering roles, duplicates, strangers, direct-vs-group and the dashboard.
+- Not yet: leave, admin transfer, ending a group, and the whole React side.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
-  hash, created at) and `V2__create_conversations_and_messages.sql`
-  (conversations, conversation_members, messages). Display name and language
-  arrive with the profile feature; conversation type, group name and member
-  role arrive with group chats. `ddl-auto=validate`, so entities must match
-  migrations.
+  hash, created at), `V2__create_conversations_and_messages.sql`
+  (conversations, conversation_members, messages) and
+  `V3__add_group_chats.sql` (conversation type and name, member role).
+  Display name and language arrive with the profile feature.
+  `ddl-auto=validate`, so entities must match migrations.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the

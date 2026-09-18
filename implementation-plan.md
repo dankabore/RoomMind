@@ -67,10 +67,10 @@ the one above it runs.
 
 ## Phase 5 — Group chats
 
-- [ ] Migration: conversation type, group name, member role
-- [ ] Create group endpoint, creator becomes admin
-- [ ] Add member endpoint, admin only
-- [ ] Remove member endpoint, admin only
+- [x] Migration: conversation type, group name, member role
+- [x] Create group endpoint, creator becomes admin
+- [x] Add member endpoint, admin only
+- [x] Remove member endpoint, admin only
 - [ ] Leave endpoint for ordinary members
 - [ ] Block admin from leaving while other members remain
 - [ ] Transfer admin endpoint

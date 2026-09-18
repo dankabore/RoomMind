@@ -2,6 +2,7 @@ package com.roommind.repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import com.roommind.entity.ConversationMember;
 
@@ -17,6 +18,33 @@ public interface ConversationMemberRepository extends JpaRepository<Conversation
 	 * to a single count query.
 	 */
 	boolean existsByConversationIdAndUserId(Long conversationId, Long userId);
+
+	/**
+	 * One person's membership row with the conversation attached, which is what
+	 * every group permission check needs: whether they are in it at all, whether
+	 * it is a group, and whether they are its admin. The fetch join answers all
+	 * three from one query rather than loading the conversation on first touch.
+	 */
+	@Query("""
+		select cm from ConversationMember cm
+		join fetch cm.conversation
+		where cm.conversation.id = :conversationId and cm.user.id = :userId
+		""")
+	Optional<ConversationMember> findMembership(@Param("conversationId") Long conversationId,
+			@Param("userId") Long userId);
+
+	/**
+	 * Everyone in one conversation, by name, with their accounts joined in. This
+	 * is a group's member list; without the fetch join, reading each username
+	 * would cost a query of its own.
+	 */
+	@Query("""
+		select cm from ConversationMember cm
+		join fetch cm.user
+		where cm.conversation.id = :conversationId
+		order by cm.user.username
+		""")
+	List<ConversationMember> findMembersOf(@Param("conversationId") Long conversationId);
 
 	/**
 	 * Everyone in these conversations except the caller — for a direct

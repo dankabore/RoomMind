@@ -44,18 +44,22 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 			Limit limit);
 
 	/**
-	 * The newest message in every conversation this person belongs to, most
-	 * recent first. This is the dashboard: one row per conversation, ordered by
-	 * how recently anything was said in it.
+	 * The newest message in every direct conversation this person belongs to,
+	 * most recent first. This is the dashboard: one row per conversation,
+	 * ordered by how recently anything was said in it.
 	 *
 	 * max(id) finds each conversation's latest message because ids only ever
 	 * increase. A conversation with no messages has no max, so it drops out on
 	 * its own — which keeps chats that were opened but never used off the list.
+	 *
+	 * Groups are left out until the dashboard has a row shape for them: its row
+	 * names one other person, and a group has no single person on the far side.
 	 */
 	@Query("""
 		select m from Message m
 		join fetch m.sender
-		where m.id in (
+		where m.conversation.type = com.roommind.enums.ConversationType.DIRECT
+		  and m.id in (
 			select max(m2.id) from Message m2
 			where m2.conversation.id in (
 				select cm.conversation.id from ConversationMember cm where cm.user.id = :userId
@@ -64,5 +68,5 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 		)
 		order by m.id desc
 		""")
-	List<Message> findLatestInEachConversationOf(@Param("userId") Long userId);
+	List<Message> findLatestInEachDirectConversationOf(@Param("userId") Long userId);
 }
