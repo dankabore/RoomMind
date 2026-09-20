@@ -8,6 +8,12 @@ type MessageListProps = {
   myId?: number
   /** Named in the empty state, so an empty chat says who to talk to. */
   otherUsername: string
+  /**
+   * Whether to put a name above other people's messages. A group needs it —
+   * the side a bubble sits on only says whether it is yours — while a chat
+   * with one person would just repeat the name in the header on every line.
+   */
+  showSenders?: boolean
   loading: boolean
   /** Why the messages could not be loaded. Undefined means they could. */
   error?: string
@@ -25,6 +31,7 @@ function MessageList({
   messages,
   myId,
   otherUsername,
+  showSenders = false,
   loading,
   error,
   hasOlder,
@@ -101,9 +108,19 @@ function MessageList({
           </p>
         )}
 
-        {messages.map((message) => (
-          <Bubble key={message.id} message={message} mine={message.senderId === myId} />
-        ))}
+        {messages.map((message) => {
+          const mine = message.senderId === myId
+          return (
+            <Bubble
+              key={message.id}
+              message={message}
+              mine={mine}
+              // Never above your own: you know who you are, and the bubble is
+              // already on your side of the screen.
+              showSender={showSenders && !mine}
+            />
+          )
+        })}
       </div>
     </div>
   )
@@ -114,7 +131,15 @@ function MessageList({
  * the side is what tells the two apart at a glance, the colour just reinforces
  * it.
  */
-function Bubble({ message, mine }: { message: Message; mine: boolean }) {
+function Bubble({
+  message,
+  mine,
+  showSender = false,
+}: {
+  message: Message
+  mine: boolean
+  showSender?: boolean
+}) {
   return (
     <div className={mine ? 'flex justify-end' : 'flex justify-start'}>
       <div
@@ -123,6 +148,10 @@ function Bubble({ message, mine }: { message: Message; mine: boolean }) {
           mine ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 shadow-sm',
         ].join(' ')}
       >
+        {showSender && (
+          <p className="mb-0.5 text-xs font-medium text-slate-500">{message.senderUsername}</p>
+        )}
+
         {/* break-words stops one long unbroken string from widening the bubble
             past the screen; whitespace-pre-wrap keeps the sender's line breaks. */}
         <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>

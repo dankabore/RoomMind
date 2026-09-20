@@ -32,11 +32,27 @@ export type Message = {
   createdAt: string
 }
 
-/** One row of the dashboard: a conversation and the last thing said in it. */
+/**
+ * One row of the dashboard: a conversation and the last thing said in it.
+ *
+ * A group with nothing said in it yet is on this list; a direct conversation in
+ * that state is not, because opening someone's chat creates one whether or not
+ * anything is said.
+ *
+ * A row is either a direct conversation or a group, and `type` says which. The
+ * two name themselves differently — a direct conversation by the person on the
+ * other side, a group by its own name — so exactly one of `otherUser` and
+ * `name` is filled in.
+ */
 export type ConversationSummary = {
   id: number
-  otherUser: Person
-  lastMessage: Message
+  type: 'DIRECT' | 'GROUP'
+  name: string | null
+  otherUser: Person | null
+  /** Null for a group nobody has written in yet. */
+  lastMessage: Message | null
+  /** When the conversation began; what an empty group shows instead of a message time. */
+  createdAt: string
 }
 
 // How the cache holds one conversation: a list of pages, each a list of

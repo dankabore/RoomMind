@@ -75,9 +75,9 @@ the one above it runs.
 - [ ] Block admin from leaving while other members remain
 - [ ] Transfer admin endpoint
 - [ ] End the group when the last member, the admin, leaves
-- [ ] React: create group
-- [ ] React: member list
-- [ ] React: add and remove members
+- [x] React: create group
+- [x] React: member list
+- [x] React: add and remove members
 - [ ] React: leave group
 - [ ] React: transfer admin
 

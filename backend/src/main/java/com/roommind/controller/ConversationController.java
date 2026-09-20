@@ -71,6 +71,17 @@ public class ConversationController {
 	}
 
 	/**
+	 * A group and its members. Any member can read it; only the admin can change
+	 * it with the two below.
+	 */
+	@GetMapping("/{conversationId}/members")
+	public ResponseEntity<GroupResponse> readGroup(
+			@AuthenticationPrincipal Jwt jwt,
+			@PathVariable Long conversationId) {
+		return ResponseEntity.ok(conversationService.readGroup(jwt.getSubject(), conversationId));
+	}
+
+	/**
 	 * Adds someone to a group. 201, because a membership is created.
 	 *
 	 * It answers with the whole group rather than just the person added, so the

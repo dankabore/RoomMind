@@ -90,10 +90,14 @@ Frontend under `frontend/src/`:
     lib/         api.ts (axios instance and error text), auth.ts (token
                  storage), forms.ts (field-error state and shared checks),
                  chat.ts (chat types and the hooks that list, fetch, page,
-                 send and listen live), socket.ts (the one STOMP connection
+                 send and listen live), groups.ts (making a group and
+                 changing who is in it), socket.ts (the one STOMP connection
                  and the list of what open screens are subscribed to)
     pages/       DashboardPage — the signed-in home page at /, your
-                 conversations with a last-message preview;
+                 conversations and groups with a last-message preview;
+                 NewGroupPage — /groups/new, name a group and pick who is in
+                 it; GroupChatPage — /group/<conversation id>, one group with
+                 its member panel;
                  LoginPage, RegisterPage — state, validation rules, submit;
                  PeoplePage — the searchable list of everyone;
                  ChatPage — one conversation, at /chat/<other user id>; only
@@ -101,7 +105,10 @@ Frontend under `frontend/src/`:
     components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth,
                  Avatar, ChatHeader, MessageList (owns the scroll
                  corrections), MessageComposer (owns the draft text),
-                 LogoutButton (the button and its confirmation dialog)
+                 LogoutButton (the button and its confirmation dialog),
+                 GroupChatHeader, GroupMembers (the member panel),
+                 PersonPicker (search and pick someone, used by both group
+                 screens)
 
 Migrations live in `backend/src/main/resources/db/migration/`.
 
@@ -156,13 +163,13 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Phase 3 conversation list: `GET /api/conversations` returns the caller's
   conversations, most recently active first, each with `otherUser` and the
   whole `lastMessage` (the screen shortens it, not the API).
-- It is two queries however many conversations there are: the latest message
-  in each (`max(id)` grouped by conversation), then the other members of all
-  of them at once. Measured: 8 conversations, 2 queries.
+- It is three queries however many conversations there are: the latest message
+  in each (`max(id)` grouped by conversation), the caller's groups that have no
+  messages, then the other members of all the direct ones at once.
 - `listFor` gathers the other members with `toMap`, which throws if one
-  conversation has two other people. The dashboard query now asks for direct
-  conversations only, so that cannot happen; groups need their own row shape
-  before they can appear there.
+  conversation has two other people. It only asks about the direct
+  conversations in the list, so that cannot happen; a group names itself and
+  needs no such lookup.
 - Phase 3 dashboard: `/` lists your conversations with the other person, the
   time of the last message and its start (`You:` when you sent it). Rows link
   to `/chat/<their user id>`, the same address the people page uses, and the
@@ -238,7 +245,30 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   the service.
 - Verified against a running backend with a curl script (scratchpad): 23 checks
   covering roles, duplicates, strangers, direct-vs-group and the dashboard.
-- Not yet: leave, admin transfer, ending a group, and the whole React side.
+- `GET /api/conversations/{id}/members` reads one group and its members. Any
+  member may; the admin alone may change it.
+- `GET /api/conversations` now returns groups as well as direct conversations.
+  A row carries `type`, and exactly one of `otherUser` (direct) and `name`
+  (group) is filled in. This changed a reviewed endpoint, deliberately: the
+  home page is one list of everything, which is what the user chose.
+- Phase 5 frontend: `/groups/new` names a group and picks who starts in it,
+  `/group/<conversation id>` is the group chat. The group address is the
+  conversation's id, unlike `/chat/<user id>`, because a group exists in its
+  own right and there is no person to name it after.
+- `lib/groups.ts` holds the group hooks; reading and sending a group's messages
+  is no different from any other conversation, so that stays in `lib/chat.ts`.
+  Live messages work in a group unchanged.
+- `MessageList` gained `showSenders`: in a group the side a bubble sits on only
+  says whether it is yours, so everyone else's needs a name above it.
+- `PersonPicker` fetches the whole people list once and filters it in the
+  browser, rather than searching per keystroke as the people page does. It is a
+  short list in a panel, not the directory.
+- The member panel's buttons are drawn only for the admin, but the backend
+  refuses either way; hiding them is convenience, not the rule.
+- A new group is on the home page list straight away, with "No messages yet"
+  where the preview goes. Creating one still goes straight into the group.
+- Not yet: leave, admin transfer, ending a group, and the two React screens
+  those need.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
@@ -272,9 +302,12 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - `POST /api/conversations/direct` answers 200, not the usual 201-on-create,
   because it is find-or-create and the caller does not act differently on
   whether a row was written.
-- Opening a conversation creates it even if nothing is ever sent. The list
-  endpoint leaves those out: with no messages there is no latest message, so
-  they drop out of the query on their own.
+- Opening a direct conversation creates it even if nothing is ever sent, and
+  the list endpoint leaves those out: with no messages there is no latest
+  message, so they drop out of that query on their own. Empty groups are the
+  exception and are fetched separately — making a group is deliberate, and the
+  list is the way back into it. Their row has a null `lastMessage` and is
+  placed by the conversation's `createdAt`, which every row now carries.
 - Token validation is Spring Security's `oauth2ResourceServer`, not a
   hand-written filter. There is no `UserDetailsService` or
   `AuthenticationProvider`: `AuthService` checks the password itself.
