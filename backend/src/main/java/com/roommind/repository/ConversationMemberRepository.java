@@ -20,6 +20,14 @@ public interface ConversationMemberRepository extends JpaRepository<Conversation
 	boolean existsByConversationIdAndUserId(Long conversationId, Long userId);
 
 	/**
+	 * How many people are in a conversation. Leaving reads this to tell the two
+	 * cases apart: an admin with others still in the group has to hand the role
+	 * on first, while an admin who is the last one left takes the group with
+	 * them.
+	 */
+	long countByConversationId(Long conversationId);
+
+	/**
 	 * One person's membership row with the conversation attached, which is what
 	 * every group permission check needs: whether they are in it at all, whether
 	 * it is a group, and whether they are its admin. The fetch join answers all

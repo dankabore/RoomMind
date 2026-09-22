@@ -91,8 +91,8 @@ export function useAddMember(conversationId: number) {
 }
 
 /**
- * Takes someone out of a group. Admin only, and never yourself: an admin leaves
- * by handing the role on first, which is not built yet.
+ * Takes someone out of a group. Admin only, and never yourself: to leave you
+ * hand the role on first and then use the leave hook below.
  *
  * Removal answers with nothing at all — there is no group left to describe from
  * the removed person's side and the path already says who went — so this one
@@ -106,5 +106,48 @@ export function useRemoveMember(conversationId: number) {
       await api.delete(`/api/conversations/${conversationId}/members/${userId}`)
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: groupKey(conversationId) }),
+  })
+}
+
+/**
+ * Hands the admin role to another member. The admin who does it becomes an
+ * ordinary member at the same moment, since a group has exactly one admin.
+ *
+ * The answer is the group with both roles already changed, so the panel redraws
+ * from it and the buttons that only the admin has disappear on their own.
+ */
+export function useTransferAdmin(conversationId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (userId: number) => {
+      const response = await api.put<Group>(`/api/conversations/${conversationId}/admin`, { userId })
+      return response.data
+    },
+    onSuccess: (group) => queryClient.setQueryData(groupKey(conversationId), group),
+  })
+}
+
+/**
+ * Leaves a group. Refused for an admin who still has company — they have to
+ * hand the role on first — and if the admin is the last one in, the group ends
+ * with them.
+ *
+ * Afterwards the group is dropped from the cache rather than refetched: asking
+ * for it again would be asking about a conversation the caller is no longer in,
+ * which answers 404. The screen navigates away.
+ */
+export function useLeaveGroup(conversationId: number) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async () => {
+      await api.post(`/api/conversations/${conversationId}/leave`)
+    },
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: groupKey(conversationId) })
+      queryClient.removeQueries({ queryKey: ['messages', conversationId] })
+      queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    },
   })
 }

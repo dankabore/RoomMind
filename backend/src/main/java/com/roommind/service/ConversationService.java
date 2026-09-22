@@ -17,6 +17,7 @@ import com.roommind.dto.CreateGroupRequest;
 import com.roommind.dto.GroupMemberResponse;
 import com.roommind.dto.GroupResponse;
 import com.roommind.dto.OpenDirectRequest;
+import com.roommind.dto.TransferAdminRequest;
 import com.roommind.entity.Conversation;
 import com.roommind.entity.ConversationMember;
 import com.roommind.entity.Message;
@@ -233,7 +234,7 @@ public class ConversationService {
 	 */
 	@Transactional
 	public GroupResponse addMember(String subject, Long conversationId, AddMemberRequest request) {
-		Conversation group = requireGroupAdmin(conversationId, Long.valueOf(subject));
+		Conversation group = requireGroupAdmin(conversationId, Long.valueOf(subject)).getConversation();
 
 		User user = userRepository.findById(request.getUserId())
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That account does not exist."));
@@ -276,29 +277,102 @@ public class ConversationService {
 	}
 
 	/**
-	 * Stops here unless the caller is the admin of a group, and hands back the
-	 * group if they are.
+	 * Hands the admin role to another member. The admin who calls it becomes an
+	 * ordinary member in the same breath — there is exactly one admin, so this
+	 * is a swap rather than a promotion.
 	 *
-	 * The three answers are deliberately different. A stranger gets the same 404
-	 * requireMember gives, so trying ids reveals nothing. A member who is not the
-	 * admin gets 403, because they already know the group exists and hiding it
-	 * from them would only be confusing. Pointing this at a direct conversation
-	 * is a 400 — it exists and they are in it, but it has no membership to run.
+	 * Required rather than optional, because an admin cannot leave a group that
+	 * still has people in it. Without this there would be no way out for them.
 	 */
-	private Conversation requireGroupAdmin(Long conversationId, Long userId) {
+	@Transactional
+	public GroupResponse transferAdmin(String subject, Long conversationId, TransferAdminRequest request) {
+		Long callerId = Long.valueOf(subject);
+		ConversationMember admin = requireGroupAdmin(conversationId, callerId);
+
+		if (callerId.equals(request.getUserId())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "You are already the admin.");
+		}
+
+		ConversationMember successor = conversationMemberRepository
+			.findMembership(conversationId, request.getUserId())
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That person is not in this group."));
+
+		admin.setRole(MemberRole.MEMBER);
+		successor.setRole(MemberRole.ADMIN);
+		conversationMemberRepository.saveAll(List.of(admin, successor));
+
+		return groupResponse(admin.getConversation());
+	}
+
+	/**
+	 * Leaves a group.
+	 *
+	 * Anyone may leave except an admin who still has company: they have to hand
+	 * the role on first, or the group would be left with nobody able to add or
+	 * remove anyone. An admin who is the last one in takes the group with them —
+	 * a conversation nobody belongs to can never be read or written again, so it
+	 * is deleted rather than left behind.
+	 *
+	 * Leaving does not take your messages with you. They were said, and removing
+	 * them would leave holes in everyone else's history.
+	 */
+	@Transactional
+	public void leave(String subject, Long conversationId) {
+		ConversationMember membership = requireGroupMembership(conversationId, Long.valueOf(subject));
+		Conversation group = membership.getConversation();
+		long members = conversationMemberRepository.countByConversationId(conversationId);
+
+		if (membership.getRole() == MemberRole.ADMIN && members > 1) {
+			throw new ResponseStatusException(HttpStatus.CONFLICT,
+				"Hand the admin role to someone else before you leave.");
+		}
+
+		conversationMemberRepository.delete(membership);
+
+		if (members == 1) {
+			// The order matters: both the messages and the membership row point
+			// at the conversation, so they have to be gone before it can be. The
+			// flush is what makes the queued membership delete actually run
+			// first; without it Hibernate could send the three in any order and
+			// the database would refuse.
+			messageRepository.deleteAllInConversation(conversationId);
+			conversationMemberRepository.flush();
+			conversationRepository.delete(group);
+		}
+	}
+
+	/**
+	 * Stops here unless the caller is in this group, and hands back their
+	 * membership row.
+	 *
+	 * A stranger gets the same 404 requireMember gives, so trying ids reveals
+	 * nothing. Pointing this at a direct conversation is a 400 — it exists and
+	 * they are in it, but it has no membership to run.
+	 */
+	private ConversationMember requireGroupMembership(Long conversationId, Long userId) {
 		ConversationMember membership = conversationMemberRepository.findMembership(conversationId, userId)
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That conversation does not exist."));
 
-		Conversation conversation = membership.getConversation();
-		if (conversation.getType() != ConversationType.GROUP) {
+		if (membership.getConversation().getType() != ConversationType.GROUP) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "That conversation is not a group.");
 		}
+
+		return membership;
+	}
+
+	/**
+	 * The same, but only for the admin. A member who is not the admin gets 403,
+	 * because they already know the group exists and hiding it from them would
+	 * only be confusing.
+	 */
+	private ConversationMember requireGroupAdmin(Long conversationId, Long userId) {
+		ConversationMember membership = requireGroupMembership(conversationId, userId);
 
 		if (membership.getRole() != MemberRole.ADMIN) {
 			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the group's admin can do that.");
 		}
 
-		return conversation;
+		return membership;
 	}
 
 	/**

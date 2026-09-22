@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import GroupChatHeader from '../components/GroupChatHeader'
 import GroupMembers from '../components/GroupMembers'
 import MessageComposer from '../components/MessageComposer'
@@ -10,7 +10,7 @@ import { api, errorMessage } from '../lib/api'
 import type { Person } from '../lib/chat'
 import { useLiveMessages, useMessages, useSendMessage } from '../lib/chat'
 import type { Group } from '../lib/groups'
-import { useAddMember, useGroup, useRemoveMember } from '../lib/groups'
+import { useAddMember, useGroup, useLeaveGroup, useRemoveMember, useTransferAdmin } from '../lib/groups'
 
 /**
  * One group conversation.
@@ -66,6 +66,7 @@ function GroupView({ group }: { group: Group }) {
     retry: false,
   })
 
+  const navigate = useNavigate()
   const [membersOpen, setMembersOpen] = useState(false)
 
   const history = useMessages(group.id)
@@ -73,6 +74,16 @@ function GroupView({ group }: { group: Group }) {
   const sendMessage = useSendMessage(group.id)
   const addMember = useAddMember(group.id)
   const removeMember = useRemoveMember(group.id)
+  const transferAdmin = useTransferAdmin(group.id)
+  const leaveGroup = useLeaveGroup(group.id)
+
+  // Leaving is the one change that makes this screen unreadable to the person
+  // who made it, so it is also the one that navigates away. replace, because
+  // going Back to a group you have left would only show an error.
+  async function handleLeave() {
+    await leaveGroup.mutateAsync()
+    navigate('/', { replace: true })
+  }
 
   // The backend decides this too, and refuses either way; here it only decides
   // whether the buttons are worth drawing.
@@ -127,6 +138,16 @@ function GroupView({ group }: { group: Group }) {
             removeError={
               removeMember.error ? errorMessage(removeMember.error, 'Could not remove them.') : undefined
             }
+            onPromote={transferAdmin.mutateAsync}
+            promotingId={transferAdmin.isPending ? transferAdmin.variables : undefined}
+            promoteError={
+              transferAdmin.error
+                ? errorMessage(transferAdmin.error, 'Could not hand over the admin role.')
+                : undefined
+            }
+            onLeave={handleLeave}
+            leaving={leaveGroup.isPending}
+            leaveError={leaveGroup.error ? errorMessage(leaveGroup.error, 'Could not leave the group.') : undefined}
           />
         )}
       </div>

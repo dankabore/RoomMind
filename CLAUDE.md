@@ -80,7 +80,8 @@ Backend packages under `backend/src/main/java/com/roommind/`:
                  PersonResponse, OpenDirectRequest, ConversationResponse,
                  SendMessageRequest, MessageResponse,
                  ConversationSummaryResponse, CreateGroupRequest,
-                 AddMemberRequest, GroupResponse, GroupMemberResponse
+                 AddMemberRequest, TransferAdminRequest, GroupResponse,
+                 GroupMemberResponse
     entity/      User, Conversation, ConversationMember, Message
     enums/       ConversationType, MemberRole
     mapper/      UserMapper, MessageMapper
@@ -108,7 +109,8 @@ Frontend under `frontend/src/`:
                  LogoutButton (the button and its confirmation dialog),
                  GroupChatHeader, GroupMembers (the member panel),
                  PersonPicker (search and pick someone, used by both group
-                 screens)
+                 screens), ConfirmDialog (the "are you sure?" question the
+                 member panel asks three times)
 
 Migrations live in `backend/src/main/resources/db/migration/`.
 
@@ -237,12 +239,12 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - `requireGroupAdmin` answers 404 to a stranger (same reason as
   `requireMember`), 403 to a member who is not the admin, and 400 when pointed
   at a direct conversation.
-- The admin cannot remove themselves — that is the leave endpoint's job, and it
-  is not written yet. Adding someone already in the group is 409, not a silent
-  success. Removing someone leaves their messages in place.
+- The admin cannot remove themselves — leaving is its own endpoint. Adding
+  someone already in the group is 409, not a silent success. Removing someone,
+  or leaving, leaves the messages in place.
 - Nothing enforces one admin per group in the database. A partial unique index
-  would make the coming transfer endpoint order-dependent, so the rule lives in
-  the service.
+  would make the transfer order-dependent (demote before promote, or it fails),
+  so the rule lives in the service, which swaps both roles in one transaction.
 - Verified against a running backend with a curl script (scratchpad): 23 checks
   covering roles, duplicates, strangers, direct-vs-group and the dashboard.
 - `GET /api/conversations/{id}/members` reads one group and its members. Any
@@ -267,8 +269,26 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   refuses either way; hiding them is convenience, not the rule.
 - A new group is on the home page list straight away, with "No messages yet"
   where the preview goes. Creating one still goes straight into the group.
-- Not yet: leave, admin transfer, ending a group, and the two React screens
-  those need.
+- `POST /api/conversations/{id}/leave` leaves a group and `PUT
+  /api/conversations/{id}/admin` hands the role to another member. PUT, because
+  a group has one admin and sending it twice leaves the same person in the job.
+- An admin with anyone else still in the group is refused with 409 and a reason
+  naming the fix; they hand the role on first. An admin who is the last one in
+  may leave, and the group ends with them: its messages, the membership row and
+  the conversation are deleted, in that order, with a flush between the
+  membership and the conversation so Hibernate cannot send them the other way
+  round and hit the foreign key.
+- The member panel is where all of this lives on screen: Make admin and Remove
+  on each other member's row, Leave group at the foot, each behind the same
+  confirmation dialog. An admin who cannot leave yet is told why instead of
+  being given a button that would be refused.
+- `ConfirmDialog` was pulled out once that panel needed three of these.
+  `LogoutButton` still has its own copy, which was left alone.
+- Verified against a running backend: 24 more checks covering leaving, the
+  admin's block, the handover and the group ending with its last member. All
+  three group scripts (23 + 13 + 24) pass together.
+- Phase 5 is complete. Not yet, and not planned for it: an admin's account
+  being deleted, which the rules assume never happens.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and

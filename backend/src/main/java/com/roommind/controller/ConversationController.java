@@ -8,6 +8,7 @@ import com.roommind.dto.ConversationSummaryResponse;
 import com.roommind.dto.CreateGroupRequest;
 import com.roommind.dto.GroupResponse;
 import com.roommind.dto.OpenDirectRequest;
+import com.roommind.dto.TransferAdminRequest;
 import com.roommind.service.ConversationService;
 
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -94,6 +96,31 @@ public class ConversationController {
 			@Valid @RequestBody AddMemberRequest request) {
 		return ResponseEntity.status(HttpStatus.CREATED)
 			.body(conversationService.addMember(jwt.getSubject(), conversationId, request));
+	}
+
+	/**
+	 * Hands the admin role to another member. PUT, not POST: a group has exactly
+	 * one admin, so this sets who it is, and sending the same request twice
+	 * leaves the same person in the job.
+	 */
+	@PutMapping("/{conversationId}/admin")
+	public ResponseEntity<GroupResponse> transferAdmin(
+			@AuthenticationPrincipal Jwt jwt,
+			@PathVariable Long conversationId,
+			@Valid @RequestBody TransferAdminRequest request) {
+		return ResponseEntity.ok(conversationService.transferAdmin(jwt.getSubject(), conversationId, request));
+	}
+
+	/**
+	 * Leaves a group. 204: from the caller's side there is nothing left to
+	 * describe — they can no longer read the group they just left.
+	 */
+	@PostMapping("/{conversationId}/leave")
+	public ResponseEntity<Void> leave(
+			@AuthenticationPrincipal Jwt jwt,
+			@PathVariable Long conversationId) {
+		conversationService.leave(jwt.getSubject(), conversationId);
+		return ResponseEntity.noContent().build();
 	}
 
 	/**

@@ -6,6 +6,7 @@ import com.roommind.entity.Message;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -69,4 +70,16 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 		order by m.id desc
 		""")
 	List<Message> findLatestInEachConversationOf(@Param("userId") Long userId);
+
+	/**
+	 * Throws away a conversation's messages. Used when the last member leaves a
+	 * group and the group ends with them: the rows have to go before the
+	 * conversation they point at can.
+	 *
+	 * One statement rather than loading every message to delete it one by one,
+	 * which for a long conversation would be thousands of queries.
+	 */
+	@Modifying
+	@Query("delete from Message m where m.conversation.id = :conversationId")
+	void deleteAllInConversation(@Param("conversationId") Long conversationId);
 }

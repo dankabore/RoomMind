@@ -2,13 +2,14 @@ import { useState } from 'react'
 import type { Person } from '../lib/chat'
 import type { GroupMember } from '../lib/groups'
 import Avatar from './Avatar'
+import ConfirmDialog from './ConfirmDialog'
 import PersonPicker from './PersonPicker'
 
 type GroupMembersProps = {
   members: GroupMember[]
-  /** The reader's own id, to mark their row and to keep them off their own remove button. */
+  /** The reader's own id, to mark their row and to keep them off their own buttons. */
   myId?: number
-  /** Whether the reader is the admin. Only then is anything on this panel editable. */
+  /** Whether the reader is the admin. Only then is the membership editable. */
   canManage: boolean
   onAdd: (userId: number) => Promise<unknown>
   /** Who is being added right now, if anyone. */
@@ -18,15 +19,28 @@ type GroupMembersProps = {
   /** Who is being removed right now, if anyone. */
   removingId?: number
   removeError?: string
+  onPromote: (userId: number) => Promise<unknown>
+  /** Who is being made admin right now, if anyone. */
+  promotingId?: number
+  promoteError?: string
+  onLeave: () => Promise<unknown>
+  leaving: boolean
+  leaveError?: string
 }
+
+/** The question currently being asked, if any. */
+type Pending =
+  | { kind: 'remove'; member: GroupMember }
+  | { kind: 'promote'; member: GroupMember }
+  | { kind: 'leave' }
 
 /**
  * Who is in the group, down the side of the chat.
  *
  * Everybody sees the list — you can see who is writing in the group anyway —
- * but only the admin gets the buttons. For everyone else this is a panel that
- * reads, which is also what the backend enforces: an ordinary member's attempt
- * to add or remove is refused there, not just hidden here.
+ * and everybody can leave. Only the admin gets the buttons that change other
+ * people's membership, which is also what the backend enforces: an ordinary
+ * member's attempt is refused there, not just hidden here.
  */
 function GroupMembers({
   members,
@@ -38,30 +52,33 @@ function GroupMembers({
   onRemove,
   removingId,
   removeError,
+  onPromote,
+  promotingId,
+  promoteError,
+  onLeave,
+  leaving,
+  leaveError,
 }: GroupMembersProps) {
   const memberIds = members.map((member) => member.id)
-  // Who the "are you sure?" question is currently about, or null when it is not
-  // being asked. Removing somebody cannot be undone from here — the admin would
-  // have to add them back — so it is asked the same way logging out is.
-  const [confirming, setConfirming] = useState<GroupMember | null>(null)
+  // Everything here that cannot be undone from this panel asks first, the same
+  // way logging out does.
+  const [pending, setPending] = useState<Pending | null>(null)
 
-  async function handlePick(person: Person) {
-    try {
-      await onAdd(person.id)
-    } catch {
-      // Nothing to do here: the failure reaches the screen through addError.
-    }
-  }
+  // An admin cannot walk out on a group that still has people in it: somebody
+  // has to be able to add and remove. The last one in may leave, and the group
+  // goes with them.
+  const alone = members.length === 1
+  const mustHandOver = canManage && !alone
 
-  async function handleRemove(member: GroupMember) {
+  async function run(action: () => Promise<unknown>) {
     try {
-      await onRemove(member.id)
+      await action()
     } catch {
-      // Same again — removeError is what says so.
+      // Nothing to do here: each failure reaches the screen through its own
+      // error message below.
     } finally {
-      // Closed either way. A failure has the panel's own message to show it,
-      // and that message sits behind this dialog.
-      setConfirming(null)
+      // Closed either way, because those messages sit behind this dialog.
+      setPending(null)
     }
   }
 
@@ -75,17 +92,19 @@ function GroupMembers({
       <h2 className="text-sm font-semibold text-slate-900">Members</h2>
 
       {removeError && <p className="mt-2 text-sm text-red-600">{removeError}</p>}
+      {promoteError && <p className="mt-2 text-sm text-red-600">{promoteError}</p>}
 
       <ul className="mt-2">
         {members.map((member) => {
           const isMe = member.id === myId
-          // The admin cannot remove themselves — that is leaving, which is a
-          // different thing and is not built yet — so their own row has no
-          // button rather than one that would be refused.
-          const removable = canManage && !isMe
+          // Nothing the admin can do to their own row: handing the role over
+          // names somebody else, and leaving is the button at the foot of the
+          // panel rather than removing yourself.
+          const actionable = canManage && !isMe
+          const busy = removingId !== undefined || promotingId !== undefined
 
           return (
-            <li key={member.id} className="flex items-center gap-3 rounded-lg px-1 py-2">
+            <li key={member.id} className="flex items-start gap-3 rounded-lg px-1 py-2">
               <Avatar name={member.username} self={isMe} />
 
               <div className="min-w-0 flex-1">
@@ -94,77 +113,110 @@ function GroupMembers({
                   {isMe && <span className="text-slate-400"> (you)</span>}
                 </p>
                 {member.role === 'ADMIN' && <p className="text-xs text-slate-500">Admin</p>}
-              </div>
 
-              {removable && (
-                <button
-                  type="button"
-                  onClick={() => setConfirming(member)}
-                  disabled={removingId !== undefined}
-                  aria-label={`Remove ${member.username} from the group`}
-                  className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
-                >
-                  {removingId === member.id ? 'Removing…' : 'Remove'}
-                </button>
-              )}
+                {actionable && (
+                  <div className="mt-1 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setPending({ kind: 'promote', member })}
+                      disabled={busy}
+                      className="text-xs font-medium text-slate-500 hover:text-slate-900 disabled:opacity-50"
+                    >
+                      {promotingId === member.id ? 'Handing over…' : 'Make admin'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPending({ kind: 'remove', member })}
+                      disabled={busy}
+                      aria-label={`Remove ${member.username} from the group`}
+                      className="text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+                    >
+                      {removingId === member.id ? 'Removing…' : 'Remove'}
+                    </button>
+                  </div>
+                )}
+              </div>
             </li>
           )
         })}
       </ul>
-
-      {confirming && (
-        // Same shape as the log out question: a backdrop that closes it, so
-        // there is always a way out that is not the red button.
-        <div
-          className="fixed inset-0 z-10 flex items-center justify-center bg-slate-900/40 p-6"
-          onClick={() => setConfirming(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg"
-            // Without this a click inside the box would reach the backdrop
-            // above and close the very dialog being used.
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold text-slate-900">
-              Remove {confirming.username}?
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              They will lose access to this group and everything said in it.
-              Their messages stay, and you can add them back later.
-            </p>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRemove(confirming)}
-                disabled={removingId !== undefined}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {removingId === confirming.id ? 'Removing…' : 'Remove'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {canManage && (
         <div className="mt-6 border-t border-slate-200 pt-4">
           <h3 className="mb-2 text-sm font-semibold text-slate-900">Add someone</h3>
           <PersonPicker
             excludeIds={memberIds}
-            onPick={handlePick}
+            onPick={(person: Person) => run(() => onAdd(person.id))}
             busyId={addingId}
             error={addError}
             actionLabel="Add"
           />
         </div>
+      )}
+
+      <div className="mt-6 border-t border-slate-200 pt-4">
+        {leaveError && <p className="mb-2 text-sm text-red-600">{leaveError}</p>}
+
+        {mustHandOver ? (
+          // Said rather than offered as a button that would only be refused:
+          // the way out is above this line, on somebody else's row.
+          <p className="text-xs text-slate-500">
+            You run this group. Make someone else admin before you leave.
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPending({ kind: 'leave' })}
+            disabled={leaving}
+            className="text-sm font-medium text-red-600 hover:text-red-700 disabled:opacity-50"
+          >
+            {leaving ? 'Leaving…' : 'Leave group'}
+          </button>
+        )}
+      </div>
+
+      {pending?.kind === 'remove' && (
+        <ConfirmDialog
+          title={`Remove ${pending.member.username}?`}
+          confirmLabel="Remove"
+          busyLabel="Removing…"
+          busy={removingId !== undefined}
+          onConfirm={() => run(() => onRemove(pending.member.id))}
+          onCancel={() => setPending(null)}
+        >
+          They will lose access to this group and everything said in it. Their messages stay, and you
+          can add them back later.
+        </ConfirmDialog>
+      )}
+
+      {pending?.kind === 'promote' && (
+        <ConfirmDialog
+          title={`Make ${pending.member.username} the admin?`}
+          confirmLabel="Hand over"
+          busyLabel="Handing over…"
+          busy={promotingId !== undefined}
+          tone="normal"
+          onConfirm={() => run(() => onPromote(pending.member.id))}
+          onCancel={() => setPending(null)}
+        >
+          They will be able to add and remove people, and you will become an ordinary member. Only
+          they can give the role back.
+        </ConfirmDialog>
+      )}
+
+      {pending?.kind === 'leave' && (
+        <ConfirmDialog
+          title="Leave this group?"
+          confirmLabel="Leave"
+          busyLabel="Leaving…"
+          busy={leaving}
+          onConfirm={() => run(onLeave)}
+          onCancel={() => setPending(null)}
+        >
+          {alone
+            ? 'You are the last one in it, so the group and everything in it will be deleted. This cannot be undone.'
+            : 'You will stop seeing this group and its messages. Only its admin can add you back.'}
+        </ConfirmDialog>
       )}
     </aside>
   )
