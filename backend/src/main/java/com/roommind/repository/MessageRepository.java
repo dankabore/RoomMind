@@ -6,6 +6,7 @@ import com.roommind.entity.Message;
 
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -45,16 +46,20 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 
 	/**
 	 * The newest message in every conversation this person belongs to, most
-	 * recent first. This is the dashboard: one row per conversation, ordered by
-	 * how recently anything was said in it.
+	 * recent first. This is the dashboard: one row per conversation,
+	 * ordered by how recently anything was said in it.
 	 *
 	 * max(id) finds each conversation's latest message because ids only ever
 	 * increase. A conversation with no messages has no max, so it drops out on
 	 * its own — which keeps chats that were opened but never used off the list.
+	 *
+	 * The conversation is fetched alongside each message, because the row drawn
+	 * from it needs the conversation's kind and, for a group, its name.
 	 */
 	@Query("""
 		select m from Message m
 		join fetch m.sender
+		join fetch m.conversation
 		where m.id in (
 			select max(m2.id) from Message m2
 			where m2.conversation.id in (
@@ -65,4 +70,16 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 		order by m.id desc
 		""")
 	List<Message> findLatestInEachConversationOf(@Param("userId") Long userId);
+
+	/**
+	 * Throws away a conversation's messages. Used when the last member leaves a
+	 * group and the group ends with them: the rows have to go before the
+	 * conversation they point at can.
+	 *
+	 * One statement rather than loading every message to delete it one by one,
+	 * which for a long conversation would be thousands of queries.
+	 */
+	@Modifying
+	@Query("delete from Message m where m.conversation.id = :conversationId")
+	void deleteAllInConversation(@Param("conversationId") Long conversationId);
 }

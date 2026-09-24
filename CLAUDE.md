@@ -22,7 +22,9 @@ Boot backend, React frontend, PostgreSQL.
 ## Backend conventions
 
 - Packages by layer under `com.roommind`: `config`, `controller`, `service`,
-  `repository`, `dto`, `entity`, `mapper`. No feature-named packages.
+  `repository`, `dto`, `entity`, `enums`, `mapper`. No feature-named packages.
+  Every enum lives in `enums`, whatever it belongs to — none are nested in the
+  entity or DTO that uses them.
 - Lombok for boilerplate: `@Getter`/`@Setter`/`@Builder`, and
   `@RequiredArgsConstructor` for injection instead of written constructors.
 - No `@Data` on entities (its `equals`/`hashCode` covers database-assigned ids)
@@ -77,8 +79,11 @@ Backend packages under `backend/src/main/java/com/roommind/`:
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
                  PersonResponse, OpenDirectRequest, ConversationResponse,
                  SendMessageRequest, MessageResponse,
-                 ConversationSummaryResponse
+                 ConversationSummaryResponse, CreateGroupRequest,
+                 AddMemberRequest, TransferAdminRequest, GroupResponse,
+                 GroupMemberResponse
     entity/      User, Conversation, ConversationMember, Message
+    enums/       ConversationType, MemberRole
     mapper/      UserMapper, MessageMapper
 
 Frontend under `frontend/src/`:
@@ -86,10 +91,14 @@ Frontend under `frontend/src/`:
     lib/         api.ts (axios instance and error text), auth.ts (token
                  storage), forms.ts (field-error state and shared checks),
                  chat.ts (chat types and the hooks that list, fetch, page,
-                 send and listen live), socket.ts (the one STOMP connection
+                 send and listen live), groups.ts (making a group and
+                 changing who is in it), socket.ts (the one STOMP connection
                  and the list of what open screens are subscribed to)
     pages/       DashboardPage — the signed-in home page at /, your
-                 conversations with a last-message preview;
+                 conversations and groups with a last-message preview;
+                 NewGroupPage — /groups/new, name a group and pick who is in
+                 it; GroupChatPage — /group/<conversation id>, one group with
+                 its member panel;
                  LoginPage, RegisterPage — state, validation rules, submit;
                  PeoplePage — the searchable list of everyone;
                  ChatPage — one conversation, at /chat/<other user id>; only
@@ -97,7 +106,11 @@ Frontend under `frontend/src/`:
     components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth,
                  Avatar, ChatHeader, MessageList (owns the scroll
                  corrections), MessageComposer (owns the draft text),
-                 LogoutButton (the button and its confirmation dialog)
+                 LogoutButton (the button and its confirmation dialog),
+                 GroupChatHeader, GroupMembers (the member panel),
+                 PersonPicker (search and pick someone, used by both group
+                 screens), ConfirmDialog (the "are you sure?" question the
+                 member panel asks three times)
 
 Migrations live in `backend/src/main/resources/db/migration/`.
 
@@ -152,12 +165,13 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Phase 3 conversation list: `GET /api/conversations` returns the caller's
   conversations, most recently active first, each with `otherUser` and the
   whole `lastMessage` (the screen shortens it, not the API).
-- It is two queries however many conversations there are: the latest message
-  in each (`max(id)` grouped by conversation), then the other members of all
-  of them at once. Measured: 8 conversations, 2 queries.
+- It is three queries however many conversations there are: the latest message
+  in each (`max(id)` grouped by conversation), the caller's groups that have no
+  messages, then the other members of all the direct ones at once.
 - `listFor` gathers the other members with `toMap`, which throws if one
-  conversation has two other people. Right while every conversation is
-  direct; group chats need their own shape there.
+  conversation has two other people. It only asks about the direct
+  conversations in the list, so that cannot happen; a group names itself and
+  needs no such lookup.
 - Phase 3 dashboard: `/` lists your conversations with the other person, the
   time of the last message and its start (`You:` when you sent it). Rows link
   to `/chat/<their user id>`, the same address the people page uses, and the
@@ -211,12 +225,76 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Verified with a Node harness (scratchpad) rendering the real hooks against
   the backend, including a backend restart: 12 checks. A deliberately broken
   copy failed the five aimed at dedupe, ordering, scrollback and catch-up.
+- Phase 5 group backend: `POST /api/conversations/groups` creates a group with
+  the caller as admin, `POST /api/conversations/{id}/members` adds someone and
+  `DELETE /api/conversations/{id}/members/{userId}` removes them, both admin
+  only. Add and remove answer with the whole group so the screen can redraw its
+  member list from the reply.
+- `conversations.type` is `DIRECT` or `GROUP` and `conversation_members.role`
+  is `ADMIN` or `MEMBER`, both `@Enumerated(STRING)` with check constraints in
+  the migration. A group has a name; a direct conversation must not, since its
+  name is whoever is reading it.
+- `findDirectBetween` now also requires `type = DIRECT`. The member count of
+  two alone stopped being enough the moment two-person groups were possible.
+- `requireGroupAdmin` answers 404 to a stranger (same reason as
+  `requireMember`), 403 to a member who is not the admin, and 400 when pointed
+  at a direct conversation.
+- The admin cannot remove themselves — leaving is its own endpoint. Adding
+  someone already in the group is 409, not a silent success. Removing someone,
+  or leaving, leaves the messages in place.
+- Nothing enforces one admin per group in the database. A partial unique index
+  would make the transfer order-dependent (demote before promote, or it fails),
+  so the rule lives in the service, which swaps both roles in one transaction.
+- Verified against a running backend with a curl script (scratchpad): 23 checks
+  covering roles, duplicates, strangers, direct-vs-group and the dashboard.
+- `GET /api/conversations/{id}/members` reads one group and its members. Any
+  member may; the admin alone may change it.
+- `GET /api/conversations` now returns groups as well as direct conversations.
+  A row carries `type`, and exactly one of `otherUser` (direct) and `name`
+  (group) is filled in. This changed a reviewed endpoint, deliberately: the
+  home page is one list of everything, which is what the user chose.
+- Phase 5 frontend: `/groups/new` names a group and picks who starts in it,
+  `/group/<conversation id>` is the group chat. The group address is the
+  conversation's id, unlike `/chat/<user id>`, because a group exists in its
+  own right and there is no person to name it after.
+- `lib/groups.ts` holds the group hooks; reading and sending a group's messages
+  is no different from any other conversation, so that stays in `lib/chat.ts`.
+  Live messages work in a group unchanged.
+- `MessageList` gained `showSenders`: in a group the side a bubble sits on only
+  says whether it is yours, so everyone else's needs a name above it.
+- `PersonPicker` fetches the whole people list once and filters it in the
+  browser, rather than searching per keystroke as the people page does. It is a
+  short list in a panel, not the directory.
+- The member panel's buttons are drawn only for the admin, but the backend
+  refuses either way; hiding them is convenience, not the rule.
+- A new group is on the home page list straight away, with "No messages yet"
+  where the preview goes. Creating one still goes straight into the group.
+- `POST /api/conversations/{id}/leave` leaves a group and `PUT
+  /api/conversations/{id}/admin` hands the role to another member. PUT, because
+  a group has one admin and sending it twice leaves the same person in the job.
+- An admin with anyone else still in the group is refused with 409 and a reason
+  naming the fix; they hand the role on first. An admin who is the last one in
+  may leave, and the group ends with them: its messages, the membership row and
+  the conversation are deleted, in that order, with a flush between the
+  membership and the conversation so Hibernate cannot send them the other way
+  round and hit the foreign key.
+- The member panel is where all of this lives on screen: Make admin and Remove
+  on each other member's row, Leave group at the foot, each behind the same
+  confirmation dialog. An admin who cannot leave yet is told why instead of
+  being given a button that would be refused.
+- `ConfirmDialog` was pulled out once that panel needed three of these.
+  `LogoutButton` still has its own copy, which was left alone.
+- Verified against a running backend: 24 more checks covering leaving, the
+  admin's block, the handover and the group ending with its last member. All
+  three group scripts (23 + 13 + 24) pass together.
+- Phase 5 is complete. Not yet, and not planned for it: an admin's account
+  being deleted, which the rules assume never happens.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
-  hash, created at) and `V2__create_conversations_and_messages.sql`
-  (conversations, conversation_members, messages). Display name and language
-  arrive with the profile feature; conversation type, group name and member
-  role arrive with group chats. `ddl-auto=validate`, so entities must match
-  migrations.
+  hash, created at), `V2__create_conversations_and_messages.sql`
+  (conversations, conversation_members, messages) and
+  `V3__add_group_chats.sql` (conversation type and name, member role).
+  Display name and language arrive with the profile feature.
+  `ddl-auto=validate`, so entities must match migrations.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the
@@ -244,9 +322,12 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - `POST /api/conversations/direct` answers 200, not the usual 201-on-create,
   because it is find-or-create and the caller does not act differently on
   whether a row was written.
-- Opening a conversation creates it even if nothing is ever sent. The list
-  endpoint leaves those out: with no messages there is no latest message, so
-  they drop out of the query on their own.
+- Opening a direct conversation creates it even if nothing is ever sent, and
+  the list endpoint leaves those out: with no messages there is no latest
+  message, so they drop out of that query on their own. Empty groups are the
+  exception and are fetched separately — making a group is deliberate, and the
+  list is the way back into it. Their row has a null `lastMessage` and is
+  placed by the conversation's `createdAt`, which every row now carries.
 - Token validation is Spring Security's `oauth2ResourceServer`, not a
   hand-written filter. There is no `UserDetailsService` or
   `AuthenticationProvider`: `AuthService` checks the password itself.

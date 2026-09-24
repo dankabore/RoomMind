@@ -67,19 +67,19 @@ the one above it runs.
 
 ## Phase 5 — Group chats
 
-- [ ] Migration: conversation type, group name, member role
-- [ ] Create group endpoint, creator becomes admin
-- [ ] Add member endpoint, admin only
-- [ ] Remove member endpoint, admin only
-- [ ] Leave endpoint for ordinary members
-- [ ] Block admin from leaving while other members remain
-- [ ] Transfer admin endpoint
-- [ ] End the group when the last member, the admin, leaves
-- [ ] React: create group
-- [ ] React: member list
-- [ ] React: add and remove members
-- [ ] React: leave group
-- [ ] React: transfer admin
+- [x] Migration: conversation type, group name, member role
+- [x] Create group endpoint, creator becomes admin
+- [x] Add member endpoint, admin only
+- [x] Remove member endpoint, admin only
+- [x] Leave endpoint for ordinary members
+- [x] Block admin from leaving while other members remain
+- [x] Transfer admin endpoint
+- [x] End the group when the last member, the admin, leaves
+- [x] React: create group
+- [x] React: member list
+- [x] React: add and remove members
+- [x] React: leave group
+- [x] React: transfer admin
 
 ## Phase 6 — Summarize a conversation
 
