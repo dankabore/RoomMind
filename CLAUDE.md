@@ -69,7 +69,7 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
-                 StompAuthInterceptor
+                 StompAuthInterceptor, AnthropicConfig
     controller/  AuthController, HealthController, UserController,
                  ConversationController, MessageController
     service/     AuthService, JwtService, UserService, ConversationService,
@@ -289,6 +289,11 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   three group scripts (23 + 13 + 24) pass together.
 - Phase 5 is complete. Not yet, and not planned for it: an admin's account
   being deleted, which the rules assume never happens.
+- Phase 6 started: `anthropic-java` (the official SDK) is installed and
+  `AnthropicConfig` exposes one shared `AnthropicClient`. The key comes from
+  `ANTHROPIC_API_KEY` through `app.anthropic.api-key`; unset, the app still
+  starts and only calls to Claude fail (401 from the API). No model name in
+  config yet — it arrives with the summarize service.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
