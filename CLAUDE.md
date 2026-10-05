@@ -73,7 +73,7 @@ Backend packages under `backend/src/main/java/com/roommind/`:
     controller/  AuthController, HealthController, UserController,
                  ConversationController, MessageController
     service/     AuthService, JwtService, UserService, ConversationService,
-                 MessageService
+                 MessageService, SummaryService
     repository/  UserRepository, ConversationRepository,
                  ConversationMemberRepository, MessageRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
@@ -294,6 +294,17 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   `ANTHROPIC_API_KEY` through `app.anthropic.api-key`; unset, the app still
   starts and only calls to Claude fail (401 from the API). No model name in
   config yet — it arrives with the summarize service.
+- `SummaryService.transcript` turns the newest 200 messages into one text
+  block, oldest first, `[yyyy-MM-dd HH:mm] username: body` per line, times in
+  UTC. It reuses `findNewest`, so it is one query. 200 is a cost ceiling: every
+  message is paid for on every summary. A full 200 adds a first line saying
+  earlier messages were left out.
+- Extra lines of a multi-line message are indented four spaces, so a message
+  cannot fake a line that looks like someone else speaking.
+- `SummaryService` gathers text only. Calls to Claude will live in one class
+  of their own, so switching provider later means rewriting that one class.
+- Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
+  database: `ConversationServiceTest` (the user's) and `SummaryServiceTest`.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
