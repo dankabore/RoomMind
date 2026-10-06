@@ -23,6 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
@@ -38,6 +41,9 @@ class SummaryServiceTest {
 
 	@Mock
 	private ConversationService conversationService;
+
+	@Mock
+	private AiService aiService;
 
 	@InjectMocks
 	private SummaryService summaryService;
@@ -92,6 +98,38 @@ class SummaryServiceTest {
 
 		assertThatThrownBy(() -> summaryService.transcript("99", 1L)).isInstanceOf(ResponseStatusException.class);
 		verifyNoInteractions(messageRepository);
+	}
+
+	@Test
+	void sendsTheTranscriptToClaudeAndReturnsItsSummary() {
+		given(messageRepository.findNewest(1L, Limit.of(SummaryService.MAX_MESSAGES))).willReturn(List.of(
+			message(alice, "are we still on for friday?", "2026-10-03T14:05:00Z")));
+		given(aiService.summarize("[2026-10-03 14:05] alice: are we still on for friday?\n"))
+			.willReturn("alice asked whether friday is still on.");
+
+		assertThat(summaryService.summarize("7", 1L).getSummary()).isEqualTo("alice asked whether friday is still on.");
+	}
+
+	@Test
+	void refusesAnEmptyConversationWithoutCallingClaude() {
+		given(messageRepository.findNewest(1L, Limit.of(SummaryService.MAX_MESSAGES))).willReturn(List.of());
+
+		assertThatThrownBy(() -> summaryService.summarize("7", 1L))
+			.isInstanceOf(ResponseStatusException.class)
+			.extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+			.isEqualTo(HttpStatus.BAD_REQUEST);
+		verify(aiService, never()).summarize(anyString());
+	}
+
+	@Test
+	void neverCallsClaudeForAStranger() {
+		willThrow(new ResponseStatusException(HttpStatus.NOT_FOUND)).given(conversationService).requireMember(1L, 99L);
+
+		assertThatThrownBy(() -> summaryService.summarize("99", 1L))
+			.isInstanceOf(ResponseStatusException.class)
+			.extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+			.isEqualTo(HttpStatus.NOT_FOUND);
+		verifyNoInteractions(messageRepository, aiService);
 	}
 
 	private static Message message(User sender, String body, String createdAt) {

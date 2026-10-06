@@ -4,20 +4,23 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+import com.roommind.dto.SummaryResponse;
 import com.roommind.entity.Message;
 import com.roommind.repository.MessageRepository;
 
 import org.springframework.data.domain.Limit;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
 
 /**
  * Turning a conversation into something Claude can summarize.
  *
- * This class only gathers and lays out the text. Sending it to Claude is not
- * done here, so the part that knows about a particular AI provider stays in one
- * place of its own.
+ * This class gathers and lays out the text and decides when a summary makes
+ * sense. Sending it to Claude is AiService's job, so the part that knows about
+ * a particular AI provider stays in one place of its own.
  */
 @Service
 @RequiredArgsConstructor
@@ -39,6 +42,27 @@ public class SummaryService {
 	private final MessageRepository messageRepository;
 
 	private final ConversationService conversationService;
+
+	private final AiService aiService;
+
+	/**
+	 * A summary of the conversation's recent messages.
+	 *
+	 * The membership check happens inside transcript, before anything is read,
+	 * so a stranger gets the usual 404 and Claude is never called for them.
+	 */
+	public SummaryResponse summarize(String subject, Long conversationId) {
+		String transcript = transcript(subject, conversationId);
+
+		// Nothing to describe, and no reason to pay for a call that would say so.
+		if (transcript.isEmpty()) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "There are no messages to summarize yet.");
+		}
+
+		return SummaryResponse.builder()
+			.summary(aiService.summarize(transcript))
+			.build();
+	}
 
 	/**
 	 * The most recent messages in a conversation as one block of text, oldest

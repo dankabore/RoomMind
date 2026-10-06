@@ -85,7 +85,7 @@ the one above it runs.
 
 - [x] Add Anthropic Java SDK, API key from environment
 - [x] Service that loads recent messages and formats them for the prompt
-- [ ] Summarize endpoint, membership checked
+- [x] Summarize endpoint, membership checked
 - [ ] Cache the summary against the newest message id
 - [ ] Handle API failure and timeout
 - [ ] React: summarize button

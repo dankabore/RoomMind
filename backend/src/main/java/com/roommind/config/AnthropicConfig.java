@@ -28,6 +28,13 @@ public class AnthropicConfig {
 	private String apiKey;
 
 	/**
+	 * Which Claude model answers. In configuration rather than code because it
+	 * is the main lever on cost and quality, and changing it should not need a
+	 * rebuild.
+	 */
+	private String model;
+
+	/**
 	 * One client for the whole app. It holds a pool of HTTP connections, so
 	 * making a new one per request would throw those away every time.
 	 */

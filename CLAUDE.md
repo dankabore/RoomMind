@@ -71,9 +71,9 @@ Backend packages under `backend/src/main/java/com/roommind/`:
     config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
                  StompAuthInterceptor, AnthropicConfig
     controller/  AuthController, HealthController, UserController,
-                 ConversationController, MessageController
+                 ConversationController, MessageController, SummaryController
     service/     AuthService, JwtService, UserService, ConversationService,
-                 MessageService, SummaryService
+                 MessageService, SummaryService, AiService
     repository/  UserRepository, ConversationRepository,
                  ConversationMemberRepository, MessageRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
@@ -81,7 +81,7 @@ Backend packages under `backend/src/main/java/com/roommind/`:
                  SendMessageRequest, MessageResponse,
                  ConversationSummaryResponse, CreateGroupRequest,
                  AddMemberRequest, TransferAdminRequest, GroupResponse,
-                 GroupMemberResponse
+                 GroupMemberResponse, SummaryResponse
     entity/      User, Conversation, ConversationMember, Message
     enums/       ConversationType, MemberRole
     mapper/      UserMapper, MessageMapper
@@ -292,8 +292,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Phase 6 started: `anthropic-java` (the official SDK) is installed and
   `AnthropicConfig` exposes one shared `AnthropicClient`. The key comes from
   `ANTHROPIC_API_KEY` through `app.anthropic.api-key`; unset, the app still
-  starts and only calls to Claude fail (401 from the API). No model name in
-  config yet — it arrives with the summarize service.
+  starts and only calls to Claude fail (401 from the API). The model is
+  `app.anthropic.model`, currently `claude-opus-5`.
 - `SummaryService.transcript` turns the newest 200 messages into one text
   block, oldest first, `[yyyy-MM-dd HH:mm] username: body` per line, times in
   UTC. It reuses `findNewest`, so it is one query. 200 is a cost ceiling: every
@@ -301,8 +301,20 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   earlier messages were left out.
 - Extra lines of a multi-line message are indented four spaces, so a message
   cannot fake a line that looks like someone else speaking.
-- `SummaryService` gathers text only. Calls to Claude will live in one class
-  of their own, so switching provider later means rewriting that one class.
+- `AiService` is the only class that calls Claude; it takes and returns plain
+  strings, so switching provider means rewriting it and its config only.
+- `POST /api/conversations/{id}/summary` answers 200 with `{ summary }`. POST
+  because every call is a paid request to Claude; 200 because nothing is
+  stored. Membership is checked (404) before anything is read or sent, and an
+  empty conversation is 400 without calling Claude.
+- The transcript goes in the user message inside `<transcript>` tags; the
+  instructions say its contents are material to summarize, not instructions,
+  since any member can type text aimed at the model.
+- A refusal (`stop_reason` refusal, a normal 200 from the API) becomes 502.
+  Other API failures (no key, rate limit, timeout) are not handled yet and
+  surface as 500 — that is the "API failure and timeout" task.
+- Not verified against the real API yet: Docker and `ANTHROPIC_API_KEY` were
+  both unavailable. Covered by Mockito tests only.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
   database: `ConversationServiceTest` (the user's) and `SummaryServiceTest`.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
