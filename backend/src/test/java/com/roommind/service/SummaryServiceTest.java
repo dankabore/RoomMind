@@ -29,7 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * What Claude will be shown when someone asks for a summary. The text this
+ * What the model will be shown when someone asks for a summary. The text this
  * produces is the whole of what the model knows about the conversation, so the
  * order, the names and where one message ends all have to be right.
  */
@@ -101,7 +101,7 @@ class SummaryServiceTest {
 	}
 
 	@Test
-	void sendsTheTranscriptToClaudeAndReturnsItsSummary() {
+	void sendsTheTranscriptToTheModelAndReturnsItsSummary() {
 		given(messageRepository.findNewest(1L, Limit.of(SummaryService.MAX_MESSAGES))).willReturn(List.of(
 			message(alice, "are we still on for friday?", "2026-10-03T14:05:00Z")));
 		given(aiService.summarize("[2026-10-03 14:05] alice: are we still on for friday?\n"))
@@ -111,7 +111,7 @@ class SummaryServiceTest {
 	}
 
 	@Test
-	void refusesAnEmptyConversationWithoutCallingClaude() {
+	void refusesAnEmptyConversationWithoutCallingTheModel() {
 		given(messageRepository.findNewest(1L, Limit.of(SummaryService.MAX_MESSAGES))).willReturn(List.of());
 
 		assertThatThrownBy(() -> summaryService.summarize("7", 1L))
@@ -122,7 +122,7 @@ class SummaryServiceTest {
 	}
 
 	@Test
-	void neverCallsClaudeForAStranger() {
+	void neverCallsTheModelForAStranger() {
 		willThrow(new ResponseStatusException(HttpStatus.NOT_FOUND)).given(conversationService).requireMember(1L, 99L);
 
 		assertThatThrownBy(() -> summaryService.summarize("99", 1L))

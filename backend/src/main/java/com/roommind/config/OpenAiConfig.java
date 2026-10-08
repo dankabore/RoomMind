@@ -4,32 +4,32 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import com.anthropic.client.AnthropicClient;
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.openai.client.OpenAIClient;
+import com.openai.client.okhttp.OpenAIOkHttpClient;
 
 import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Everything under app.anthropic in application.properties, and the one client
- * the rest of the app uses to talk to Claude.
+ * Everything under app.openai in application.properties, and the one client
+ * the rest of the app uses to talk to OpenAI.
  *
- * The key comes from the ANTHROPIC_API_KEY environment variable (see
+ * The key comes from the OPENAI_API_KEY environment variable (see
  * application.properties) so it never sits in the repository. Getter and Setter
  * rather than @Data for the same reason as JwtConfig: a generated toString
  * would print the key.
  */
 @Configuration
-@ConfigurationProperties(prefix = "app.anthropic")
+@ConfigurationProperties(prefix = "app.openai")
 @Getter
 @Setter
-public class AnthropicConfig {
+public class OpenAiConfig {
 
 	private String apiKey;
 
 	/**
-	 * Which Claude model answers. In configuration rather than code because it
-	 * is the main lever on cost and quality, and changing it should not need a
+	 * Which model answers. In configuration rather than code because it is the
+	 * main lever on cost and quality, and changing it should not need a
 	 * rebuild.
 	 */
 	private String model;
@@ -39,8 +39,8 @@ public class AnthropicConfig {
 	 * making a new one per request would throw those away every time.
 	 */
 	@Bean
-	public AnthropicClient anthropicClient() {
-		return AnthropicOkHttpClient.builder()
+	public OpenAIClient openAiClient() {
+		return OpenAIOkHttpClient.builder()
 				.apiKey(apiKey)
 				.build();
 	}

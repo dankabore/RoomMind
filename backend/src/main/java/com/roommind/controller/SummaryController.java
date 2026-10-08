@@ -23,7 +23,7 @@ public class SummaryController {
 	/**
 	 * Summarizes the conversation's recent messages.
 	 *
-	 * POST rather than GET because each call asks Claude afresh and is paid
+	 * POST rather than GET because each call asks the model afresh and is paid
 	 * for; a GET is the kind of request browsers and tools feel free to repeat
 	 * on their own. 200 rather than 201, because nothing is stored.
 	 */

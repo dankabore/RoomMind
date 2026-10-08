@@ -16,10 +16,10 @@ import org.springframework.web.server.ResponseStatusException;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Turning a conversation into something Claude can summarize.
+ * Turning a conversation into something the AI model can summarize.
  *
  * This class gathers and lays out the text and decides when a summary makes
- * sense. Sending it to Claude is AiService's job, so the part that knows about
+ * sense. Sending it to the model is AiService's job, so the part that knows about
  * a particular AI provider stays in one place of its own.
  */
 @Service
@@ -34,7 +34,7 @@ public class SummaryService {
 	 */
 	static final int MAX_MESSAGES = 200;
 
-	// UTC, because the server does not know where each reader is. Claude only
+	// UTC, because the server does not know where each reader is. The model only
 	// needs the order and the gaps between messages, which UTC keeps.
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 		.withZone(ZoneOffset.UTC);
@@ -49,7 +49,7 @@ public class SummaryService {
 	 * A summary of the conversation's recent messages.
 	 *
 	 * The membership check happens inside transcript, before anything is read,
-	 * so a stranger gets the usual 404 and Claude is never called for them.
+	 * so a stranger gets the usual 404 and the model is never called for them.
 	 */
 	public SummaryResponse summarize(String subject, Long conversationId) {
 		String transcript = transcript(subject, conversationId);
@@ -109,7 +109,7 @@ public class SummaryService {
 	 * A message that runs over several lines gets its extra lines indented.
 	 *
 	 * Without this, someone could type a newline followed by
-	 * "[2026-10-03 14:06] bob: ..." and their one message would look to Claude
+	 * "[2026-10-03 14:06] bob: ..." and their one message would look to the model
 	 * like a second message from bob. With it, only a real message can start a
 	 * line with a timestamp.
 	 */

@@ -83,7 +83,7 @@ the one above it runs.
 
 ## Phase 6 — Summarize a conversation
 
-- [x] Add Anthropic Java SDK, API key from environment
+- [x] Add OpenAI Java SDK, API key from environment
 - [x] Service that loads recent messages and formats them for the prompt
 - [x] Summarize endpoint, membership checked
 - [ ] Cache the summary against the newest message id

@@ -51,7 +51,7 @@ Boot backend, React frontend, PostgreSQL.
   Spring Security 7**, which is newer than most model training data and
   renamed several starters. Check the docs before writing security,
   websocket or Flyway configuration.
-- Also worth checking there when the time comes: the Anthropic Java SDK,
+- Also worth checking there when the time comes: the OpenAI Java SDK,
   Flyway migration syntax, and STOMP setup.
 
 ## Documents
@@ -69,7 +69,7 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
-                 StompAuthInterceptor, AnthropicConfig
+                 StompAuthInterceptor, OpenAiConfig
     controller/  AuthController, HealthController, UserController,
                  ConversationController, MessageController, SummaryController
     service/     AuthService, JwtService, UserService, ConversationService,
@@ -289,11 +289,15 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   three group scripts (23 + 13 + 24) pass together.
 - Phase 5 is complete. Not yet, and not planned for it: an admin's account
   being deleted, which the rules assume never happens.
-- Phase 6 started: `anthropic-java` (the official SDK) is installed and
-  `AnthropicConfig` exposes one shared `AnthropicClient`. The key comes from
-  `ANTHROPIC_API_KEY` through `app.anthropic.api-key`; unset, the app still
-  starts and only calls to Claude fail (401 from the API). The model is
-  `app.anthropic.model`, currently `claude-opus-5`.
+- Phase 6 started: `openai-java` (OpenAI's official SDK) is installed and
+  `OpenAiConfig` exposes one shared `OpenAIClient`. The key comes from
+  `OPENAI_API_KEY` through `app.openai.api-key`; unset, the app still starts
+  and only calls to the model fail (the SDK throws before sending). The model
+  is `app.openai.model`, currently `gpt-6-luna`.
+- The project started on the Anthropic SDK and switched to OpenAI at the
+  user's choice. The switch touched only `AiService`, its config, the pom and
+  the properties. Vercel's AI SDK was considered and ruled out: it is
+  JavaScript only, so it would mean the key in the browser or a second server.
 - `SummaryService.transcript` turns the newest 200 messages into one text
   block, oldest first, `[yyyy-MM-dd HH:mm] username: body` per line, times in
   UTC. It reuses `findNewest`, so it is one query. 200 is a cost ceiling: every
@@ -301,19 +305,20 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   earlier messages were left out.
 - Extra lines of a multi-line message are indented four spaces, so a message
   cannot fake a line that looks like someone else speaking.
-- `AiService` is the only class that calls Claude; it takes and returns plain
+- `AiService` is the only class that calls the model; it takes and returns plain
   strings, so switching provider means rewriting it and its config only.
 - `POST /api/conversations/{id}/summary` answers 200 with `{ summary }`. POST
-  because every call is a paid request to Claude; 200 because nothing is
+  because every call is a paid request to OpenAI; 200 because nothing is
   stored. Membership is checked (404) before anything is read or sent, and an
-  empty conversation is 400 without calling Claude.
-- The transcript goes in the user message inside `<transcript>` tags; the
-  instructions say its contents are material to summarize, not instructions,
-  since any member can type text aimed at the model.
-- A refusal (`stop_reason` refusal, a normal 200 from the API) becomes 502.
+  empty conversation is 400 without calling the model.
+- Calls use OpenAI's Responses API: the rules go in `instructions`, the
+  transcript in `input` inside `<transcript>` tags. The rules say the
+  transcript is material to summarize, not instructions, since any member can
+  type text aimed at the model.
+- A refusal (a refusal content part in an otherwise normal reply) becomes 502.
   Other API failures (no key, rate limit, timeout) are not handled yet and
   surface as 500 — that is the "API failure and timeout" task.
-- Not verified against the real API yet: Docker and `ANTHROPIC_API_KEY` were
+- Not verified against the real API yet: Docker and `OPENAI_API_KEY` were
   both unavailable. Covered by Mockito tests only.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
   database: `ConversationServiceTest` (the user's) and `SummaryServiceTest`.
