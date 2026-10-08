@@ -318,6 +318,13 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - A refusal (a refusal content part in an otherwise normal reply) becomes 502.
   Other API failures (no key, rate limit, timeout) are not handled yet and
   surface as 500 — that is the "API failure and timeout" task.
+- Summaries are group-only: `summarize` calls
+  `ConversationService.requireGroupMembership` first (made public for this),
+  so a direct conversation is 400 and a stranger 404, before anything is read.
+  `transcript` still runs its own `requireMember`, one small extra query.
+- Next: save each group's summary with the newest message id it covers, and
+  update it from the old summary plus newer messages. Needs a `V4` table that
+  the database deletes along with its conversation (a group can end).
 - Not verified against the real API yet: Docker and `OPENAI_API_KEY` were
   both unavailable. Covered by Mockito tests only.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no

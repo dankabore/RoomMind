@@ -122,8 +122,21 @@ class SummaryServiceTest {
 	}
 
 	@Test
+	void refusesADirectConversationWithoutCallingTheModel() {
+		willThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST))
+			.given(conversationService).requireGroupMembership(1L, 7L);
+
+		assertThatThrownBy(() -> summaryService.summarize("7", 1L))
+			.isInstanceOf(ResponseStatusException.class)
+			.extracting(exception -> ((ResponseStatusException) exception).getStatusCode())
+			.isEqualTo(HttpStatus.BAD_REQUEST);
+		verifyNoInteractions(messageRepository, aiService);
+	}
+
+	@Test
 	void neverCallsTheModelForAStranger() {
-		willThrow(new ResponseStatusException(HttpStatus.NOT_FOUND)).given(conversationService).requireMember(1L, 99L);
+		willThrow(new ResponseStatusException(HttpStatus.NOT_FOUND))
+			.given(conversationService).requireGroupMembership(1L, 99L);
 
 		assertThatThrownBy(() -> summaryService.summarize("99", 1L))
 			.isInstanceOf(ResponseStatusException.class)

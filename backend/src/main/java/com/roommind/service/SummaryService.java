@@ -46,12 +46,18 @@ public class SummaryService {
 	private final AiService aiService;
 
 	/**
-	 * A summary of the conversation's recent messages.
+	 * A summary of a group's recent messages.
 	 *
-	 * The membership check happens inside transcript, before anything is read,
-	 * so a stranger gets the usual 404 and the model is never called for them.
+	 * Groups only: a one-to-one chat is short enough to read, and the volume of
+	 * a busy group is what summaries are for. The check runs before anything is
+	 * read, so a stranger gets the usual 404, a direct conversation gets 400,
+	 * and the model is never called for either.
 	 */
 	public SummaryResponse summarize(String subject, Long conversationId) {
+		conversationService.requireGroupMembership(conversationId, Long.valueOf(subject));
+
+		// transcript checks membership again. That is one small extra query,
+		// kept so transcript stays safe to call on its own.
 		String transcript = transcript(subject, conversationId);
 
 		// Nothing to describe, and no reason to pay for a call that would say so.
