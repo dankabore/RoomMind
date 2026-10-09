@@ -75,14 +75,15 @@ Backend packages under `backend/src/main/java/com/roommind/`:
     service/     AuthService, JwtService, UserService, ConversationService,
                  MessageService, SummaryService, AiService
     repository/  UserRepository, ConversationRepository,
-                 ConversationMemberRepository, MessageRepository
+                 ConversationMemberRepository, MessageRepository,
+                 GroupSummaryRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
                  PersonResponse, OpenDirectRequest, ConversationResponse,
                  SendMessageRequest, MessageResponse,
                  ConversationSummaryResponse, CreateGroupRequest,
                  AddMemberRequest, TransferAdminRequest, GroupResponse,
                  GroupMemberResponse, SummaryResponse
-    entity/      User, Conversation, ConversationMember, Message
+    entity/      User, Conversation, ConversationMember, Message, GroupSummary
     enums/       ConversationType, MemberRole
     mapper/      UserMapper, MessageMapper
 
@@ -321,18 +322,36 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Summaries are group-only: `summarize` calls
   `ConversationService.requireGroupMembership` first (made public for this),
   so a direct conversation is 400 and a stranger 404, before anything is read.
-  `transcript` still runs its own `requireMember`, one small extra query.
-- Next: save each group's summary with the newest message id it covers, and
-  update it from the old summary plus newer messages. Needs a `V4` table that
-  the database deletes along with its conversation (a group can end).
-- Not verified against the real API yet: Docker and `OPENAI_API_KEY` were
-  both unavailable. Covered by Mockito tests only.
+- Each group has at most one saved summary (`group_summaries`, keyed by
+  conversation id) with `last_message_id`, the newest message it covers.
+  Three cases: nothing saved, so summarize the newest 200; saved and nothing
+  newer, so return it with no model call; saved and newer messages, so
+  `AiService.updateSummary` gets the old summary plus up to 200 newer ones
+  (`findNewerThan`) and writes a replacement. The result is saved each time.
+- The update rules ask for a whole replacement that drops what no longer
+  matters, so the summary does not grow per request. Old details fade; exact
+  questions about the past are for @ai.
+- `group_summaries.conversation_id` is `on delete cascade`, so a group ending
+  removes its summary without the leave code knowing. `last_message_id` is
+  deliberately not a foreign key: messages are deleted before the
+  conversation, and a reference would block that.
+- `summarize` is not `@Transactional`, so no database connection is held for
+  the seconds the model takes. Two simultaneous requests both call the model
+  and the later save wins; the cost is one extra call, accepted.
+- `transcript` is now a package-private static taking the message list and a
+  note for a full batch, so it can be tested without stubbing queries.
+- Verified against a running backend with a curl script (scratchpad): 12
+  checks covering direct and stranger refusals, the empty group, a failed call
+  saving nothing, the saved summary returned without a model call, a failed
+  update leaving the row alone, and the summary deleted with its group. No
+  real model call yet: there is no `OPENAI_API_KEY` on this machine.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
   database: `ConversationServiceTest` (the user's) and `SummaryServiceTest`.
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
-  `V3__add_group_chats.sql` (conversation type and name, member role).
+  `V3__add_group_chats.sql` (conversation type and name, member role) and
+  `V4__create_group_summaries.sql` (one saved summary per group).
   Display name and language arrive with the profile feature.
   `ddl-auto=validate`, so entities must match migrations.
 - Email is the login identity and is stored lowercased; username is the public

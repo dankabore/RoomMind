@@ -1,11 +1,14 @@
 package com.roommind.service;
 
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import com.roommind.dto.SummaryResponse;
+import com.roommind.entity.GroupSummary;
 import com.roommind.entity.Message;
+import com.roommind.repository.GroupSummaryRepository;
 import com.roommind.repository.MessageRepository;
 
 import org.springframework.data.domain.Limit;
@@ -18,8 +21,8 @@ import lombok.RequiredArgsConstructor;
 /**
  * Turning a conversation into something the AI model can summarize.
  *
- * This class gathers and lays out the text and decides when a summary makes
- * sense. Sending it to the model is AiService's job, so the part that knows about
+ * This class gathers and lays out the text, decides when a summary is needed
+ * and keeps each group's latest one. Sending it to the model is AiService's job, so the part that knows about
  * a particular AI provider stays in one place of its own.
  */
 @Service
@@ -27,10 +30,10 @@ import lombok.RequiredArgsConstructor;
 public class SummaryService {
 
 	/**
-	 * How far back a summary reads. Every message sent is paid for in tokens on
-	 * every summary, and a message can be up to 4000 characters, so this is a
-	 * ceiling on cost as much as on length. Two hundred covers a busy day in a
-	 * group without letting a years-old chat send everything it holds.
+	 * The most messages one request sends: the newest ones for a first summary,
+	 * or the newest since the saved summary for an update. Every message sent is
+	 * paid for in tokens, and a message can be up to 4000 characters, so this is
+	 * a ceiling on cost as much as on length.
 	 */
 	static final int MAX_MESSAGES = 200;
 
@@ -41,62 +44,95 @@ public class SummaryService {
 
 	private final MessageRepository messageRepository;
 
+	private final GroupSummaryRepository groupSummaryRepository;
+
 	private final ConversationService conversationService;
 
 	private final AiService aiService;
 
 	/**
-	 * A summary of a group's recent messages.
+	 * The group's summary, brought up to date.
 	 *
 	 * Groups only: a one-to-one chat is short enough to read, and the volume of
 	 * a busy group is what summaries are for. The check runs before anything is
 	 * read, so a stranger gets the usual 404, a direct conversation gets 400,
 	 * and the model is never called for either.
+	 *
+	 * There are three cases:
+	 *  - no saved summary: summarize the newest messages from scratch;
+	 *  - a saved one and nothing new since: hand it back, no model call;
+	 *  - a saved one and newer messages: ask the model to fold the new messages
+	 *    into it, so only what is new is sent.
+	 * Either way a fresh result is saved together with the newest message it
+	 * covers, which is where the next request picks up.
+	 *
+	 * Not @Transactional on purpose: the model call can take seconds, and a
+	 * transaction would hold a database connection open for all of it. Each
+	 * read and the final save run on their own.
 	 */
 	public SummaryResponse summarize(String subject, Long conversationId) {
 		conversationService.requireGroupMembership(conversationId, Long.valueOf(subject));
 
-		// transcript checks membership again. That is one small extra query,
-		// kept so transcript stays safe to call on its own.
-		String transcript = transcript(subject, conversationId);
+		Limit limit = Limit.of(MAX_MESSAGES);
+		GroupSummary saved = groupSummaryRepository.findById(conversationId).orElse(null);
+		String summary;
+		List<Message> newestFirst;
 
-		// Nothing to describe, and no reason to pay for a call that would say so.
-		if (transcript.isEmpty()) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "There are no messages to summarize yet.");
+		if (saved == null) {
+			newestFirst = messageRepository.findNewest(conversationId, limit);
+
+			// Nothing to describe, and no reason to pay for a call that would say so.
+			if (newestFirst.isEmpty()) {
+				throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "There are no messages to summarize yet.");
+			}
+
+			summary = aiService.summarize(transcript(newestFirst, "(Earlier messages are not included.)"));
+		} else {
+			newestFirst = messageRepository.findNewerThan(conversationId, saved.getLastMessageId(), limit);
+
+			if (newestFirst.isEmpty()) {
+				return response(saved.getSummary());
+			}
+
+			summary = aiService.updateSummary(saved.getSummary(),
+					transcript(newestFirst, "(Some messages since the previous summary are not included.)"));
 		}
 
-		return SummaryResponse.builder()
-			.summary(aiService.summarize(transcript))
-			.build();
+		groupSummaryRepository.save(GroupSummary.builder()
+			.conversationId(conversationId)
+			// The list is newest first, so its first message is the newest covered.
+			.lastMessageId(newestFirst.get(0).getId())
+			.summary(summary)
+			.updatedAt(Instant.now())
+			.build());
+
+		return response(summary);
+	}
+
+	private static SummaryResponse response(String summary) {
+		return SummaryResponse.builder().summary(summary).build();
 	}
 
 	/**
-	 * The most recent messages in a conversation as one block of text, oldest
-	 * first, one message per line:
+	 * Messages as one block of text, oldest first, one message per line:
 	 *
 	 *     [2026-10-03 14:05] alice: are we still on for friday?
 	 *
-	 * Empty when the conversation has no messages; what to tell the caller then
-	 * is the endpoint's decision, not this method's.
+	 * The list comes in newest first, as the queries return it. `gapNote` is put
+	 * at the top when the list is a full batch, since there were probably more
+	 * messages before it; saying so stops the model treating the first line it
+	 * sees as where things began.
 	 */
-	public String transcript(String subject, Long conversationId) {
-		conversationService.requireMember(conversationId, Long.valueOf(subject));
-
-		// findNewest joins the sender in, so reading every author's name below
-		// costs no further queries.
-		List<Message> newestFirst = messageRepository.findNewest(conversationId, Limit.of(MAX_MESSAGES));
-
+	static String transcript(List<Message> newestFirst, String gapNote) {
 		StringBuilder transcript = new StringBuilder();
 
-		// A full batch means there were probably more before it. Saying so stops
-		// the summary from presenting the start of what it was given as the start
-		// of the conversation.
 		if (newestFirst.size() == MAX_MESSAGES) {
-			transcript.append("(Earlier messages are not included.)\n");
+			transcript.append(gapNote).append('\n');
 		}
 
 		// Walked from the end of the list, so the text reads oldest to newest
-		// the way the chat does.
+		// the way the chat does. The queries join the sender in, so reading every
+		// author's name here costs no further queries.
 		for (int i = newestFirst.size() - 1; i >= 0; i--) {
 			Message message = newestFirst.get(i);
 			transcript.append('[')
