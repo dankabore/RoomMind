@@ -316,9 +316,24 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   transcript in `input` inside `<transcript>` tags. The rules say the
   transcript is material to summarize, not instructions, since any member can
   type text aimed at the model.
-- A refusal (a refusal content part in an otherwise normal reply) becomes 502.
-  Other API failures (no key, rate limit, timeout) are not handled yet and
-  surface as 500 — that is the "API failure and timeout" task.
+- `AiService` turns every failure into a `ResponseStatusException` with a
+  message a reader can act on, and logs the real cause (`@Slf4j`, the first
+  logging in the project). 503: no key (checked before sending), key rejected
+  (401/403), rate limited, out of credit (429 with `insufficient_quota`, told
+  apart from busy). 504: timeout. 502: any other error status, unreachable,
+  refusal, or an empty answer (which would otherwise be saved and served).
+- `app.openai.timeout=30s` per attempt and `app.openai.max-retries=1`, so a
+  request waits about a minute at most. The library's defaults are 10 minutes
+  and 2 retries. It retries only timeouts, dropped connections, 429 and 5xx.
+- A timeout arrives as `OpenAIIoException` whose cause is an
+  `InterruptedIOException`; any other `OpenAIIoException` is unreachable.
+- `AiServiceTest` runs the real OpenAI client against a fake OpenAI (the JDK's
+  built-in `HttpServer` on a free port): 11 checks over each failure, the
+  retry count and the text. A copy with the timeout and quota checks broken
+  failed the three tests aimed at them.
+- Not yet run against the live backend: Docker's engine was down. Expected:
+  a summary request with no key answers 503 "AI features are not set up on
+  this server."
 - Summaries are group-only: `summarize` calls
   `ConversationService.requireGroupMembership` first (made public for this),
   so a direct conversation is 400 and a stranger 404, before anything is read.
@@ -346,7 +361,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   update leaving the row alone, and the summary deleted with its group. No
   real model call yet: there is no `OPENAI_API_KEY` on this machine.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
-  database: `ConversationServiceTest` (the user's) and `SummaryServiceTest`.
+  database: `ConversationServiceTest` (the user's), `SummaryServiceTest` and
+  `AiServiceTest` (the last uses a fake OpenAI server, see above).
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and

@@ -89,7 +89,7 @@ the one above it runs.
 - [x] Summaries in group chats only
 - [x] Save each group's summary with the newest message it covers
 - [x] Update a saved summary from it plus only the newer messages
-- [ ] Handle API failure and timeout
+- [x] Handle API failure and timeout
 - [ ] React: summarize button
 - [ ] React: summary panel with loading and error states
 

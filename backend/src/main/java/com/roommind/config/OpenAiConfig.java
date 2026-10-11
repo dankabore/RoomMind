@@ -1,5 +1,7 @@
 package com.roommind.config;
 
+import java.time.Duration;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,6 +37,21 @@ public class OpenAiConfig {
 	private String model;
 
 	/**
+	 * How long one attempt may take before giving up. The library's own default
+	 * is ten minutes, far longer than anyone will watch a spinner for a summary.
+	 */
+	private Duration timeout;
+
+	/**
+	 * How many times a failed attempt is tried again. The library retries only
+	 * failures that might pass on a second go (timeouts, dropped connections,
+	 * "too busy", server errors), never a bad key or a bad request. Each retry
+	 * can take the full timeout again, so the longest a person can wait is
+	 * roughly timeout x (retries + 1).
+	 */
+	private int maxRetries;
+
+	/**
 	 * One client for the whole app. It holds a pool of HTTP connections, so
 	 * making a new one per request would throw those away every time.
 	 */
@@ -42,6 +59,8 @@ public class OpenAiConfig {
 	public OpenAIClient openAiClient() {
 		return OpenAIOkHttpClient.builder()
 				.apiKey(apiKey)
+				.timeout(timeout)
+				.maxRetries(maxRetries)
 				.build();
 	}
 }
