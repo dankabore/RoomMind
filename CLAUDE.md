@@ -94,7 +94,8 @@ Frontend under `frontend/src/`:
                  chat.ts (chat types and the hooks that list, fetch, page,
                  send and listen live), groups.ts (making a group and
                  changing who is in it), socket.ts (the one STOMP connection
-                 and the list of what open screens are subscribed to)
+                 and the list of what open screens are subscribed to),
+                 summary.ts (asking for a group's summary)
     pages/       DashboardPage — the signed-in home page at /, your
                  conversations and groups with a last-message preview;
                  NewGroupPage — /groups/new, name a group and pick who is in
@@ -111,7 +112,8 @@ Frontend under `frontend/src/`:
                  GroupChatHeader, GroupMembers (the member panel),
                  PersonPicker (search and pick someone, used by both group
                  screens), ConfirmDialog (the "are you sure?" question the
-                 member panel asks three times)
+                 member panel asks three times), SummaryPanel (the
+                 summary box above a group's messages)
 
 Migrations live in `backend/src/main/resources/db/migration/`.
 
@@ -334,6 +336,18 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Not yet run against the live backend: Docker's engine was down. Expected:
   a summary request with no key answers 503 "AI features are not set up on
   this server."
+- Phase 6 frontend: a Summarize button in `GroupChatHeader` opens
+  `SummaryPanel` above the messages and asks at once. The panel shows a
+  waiting note (it can take up to a minute), the backend's `detail` on error
+  with Try again, or the summary (`whitespace-pre-line`, so lists survive)
+  with Update. It scrolls inside a fixed height and closes with ✕.
+- `useSummary` is a mutation, not a query: a query would refetch on its own
+  (page open, window focus) and each fetch can be a paid call. A new request
+  clears the previous answer, so Update shows the waiting note, not the old
+  text. Direct chats have no button; the backend refuses them anyway.
+- Frontend checked with `tsc -b`, `npm run lint` and `npm run build` only. Not
+  yet clicked through in a browser: Docker's engine was down, so no backend.
+  Phase 6 is otherwise complete.
 - Summaries are group-only: `summarize` calls
   `ConversationService.requireGroupMembership` first (made public for this),
   so a direct conversation is 400 and a stranger 404, before anything is read.

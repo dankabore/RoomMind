@@ -10,6 +10,9 @@ type GroupChatHeaderProps = {
   /** Whether the member list is open, so the button can say what it will do. */
   membersOpen: boolean
   onToggleMembers: () => void
+  onSummarize: () => void
+  /** While a summary is being written, so the button cannot be pressed twice. */
+  summarizing: boolean
 }
 
 /**
@@ -21,7 +24,14 @@ type GroupChatHeaderProps = {
  * group names itself and has a member count and a list to open; a chat with one
  * person has a name to show and nothing to open. The two only look alike.
  */
-function GroupChatHeader({ group, me, membersOpen, onToggleMembers }: GroupChatHeaderProps) {
+function GroupChatHeader({
+  group,
+  me,
+  membersOpen,
+  onToggleMembers,
+  onSummarize,
+  summarizing,
+}: GroupChatHeaderProps) {
   const count = group.members.length
 
   return (
@@ -40,6 +50,15 @@ function GroupChatHeader({ group, me, membersOpen, onToggleMembers }: GroupChatH
       </div>
 
       <div className="flex shrink-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={onSummarize}
+          disabled={summarizing}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {summarizing ? 'Summarizing…' : 'Summarize'}
+        </button>
+
         <button
           type="button"
           onClick={onToggleMembers}

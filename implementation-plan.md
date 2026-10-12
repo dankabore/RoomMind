@@ -90,8 +90,8 @@ the one above it runs.
 - [x] Save each group's summary with the newest message it covers
 - [x] Update a saved summary from it plus only the newer messages
 - [x] Handle API failure and timeout
-- [ ] React: summarize button
-- [ ] React: summary panel with loading and error states
+- [x] React: summarize button
+- [x] React: summary panel with loading and error states
 
 ## Phase 7 — Translation and @Ai
 
