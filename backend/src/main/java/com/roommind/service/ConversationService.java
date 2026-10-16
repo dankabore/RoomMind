@@ -348,8 +348,11 @@ public class ConversationService {
 	 * A stranger gets the same 404 requireMember gives, so trying ids reveals
 	 * nothing. Pointing this at a direct conversation is a 400 — it exists and
 	 * they are in it, but it has no membership to run.
+	 *
+	 * Public because SummaryService uses it too: summaries are offered in
+	 * groups only.
 	 */
-	private ConversationMember requireGroupMembership(Long conversationId, Long userId) {
+	public ConversationMember requireGroupMembership(Long conversationId, Long userId) {
 		ConversationMember membership = conversationMemberRepository.findMembership(conversationId, userId)
 			.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "That conversation does not exist."));
 

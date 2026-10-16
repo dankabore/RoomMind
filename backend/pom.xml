@@ -29,6 +29,7 @@
 	<properties>
 		<java.version>21</java.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
+		<openai.version>4.78.0</openai.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -58,6 +59,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.openai</groupId>
+			<artifactId>openai-java</artifactId>
+			<version>${openai.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.mapstruct</groupId>

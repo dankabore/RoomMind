@@ -6,11 +6,13 @@ import GroupChatHeader from '../components/GroupChatHeader'
 import GroupMembers from '../components/GroupMembers'
 import MessageComposer from '../components/MessageComposer'
 import MessageList from '../components/MessageList'
+import SummaryPanel from '../components/SummaryPanel'
 import { api, errorMessage } from '../lib/api'
 import type { Person } from '../lib/chat'
 import { useLiveMessages, useMessages, useSendMessage } from '../lib/chat'
 import type { Group } from '../lib/groups'
 import { useAddMember, useGroup, useLeaveGroup, useRemoveMember, useTransferAdmin } from '../lib/groups'
+import { useSummary } from '../lib/summary'
 
 /**
  * One group conversation.
@@ -68,6 +70,7 @@ function GroupView({ group }: { group: Group }) {
 
   const navigate = useNavigate()
   const [membersOpen, setMembersOpen] = useState(false)
+  const [summaryOpen, setSummaryOpen] = useState(false)
 
   const history = useMessages(group.id)
   useLiveMessages(group.id)
@@ -76,6 +79,14 @@ function GroupView({ group }: { group: Group }) {
   const removeMember = useRemoveMember(group.id)
   const transferAdmin = useTransferAdmin(group.id)
   const leaveGroup = useLeaveGroup(group.id)
+  const summary = useSummary(group.id)
+
+  // Opens the panel and asks straight away, so pressing the button is one step.
+  // Asking again while the panel is open brings it up to date.
+  function handleSummarize() {
+    setSummaryOpen(true)
+    summary.mutate()
+  }
 
   // Leaving is the one change that makes this screen unreadable to the person
   // who made it, so it is also the one that navigates away. replace, because
@@ -99,10 +110,24 @@ function GroupView({ group }: { group: Group }) {
         me={me}
         membersOpen={membersOpen}
         onToggleMembers={() => setMembersOpen((open) => !open)}
+        onSummarize={handleSummarize}
+        summarizing={summary.isPending}
       />
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">
+          {summaryOpen && (
+            <SummaryPanel
+              summary={summary.data?.summary}
+              loading={summary.isPending}
+              error={summary.error ? errorMessage(summary.error, 'Could not summarize this conversation.') : undefined}
+              onRefresh={() => summary.mutate()}
+              // Closing only hides it. Opening it again goes through Summarize,
+              // which asks again; that is free when nothing new has been said.
+              onClose={() => setSummaryOpen(false)}
+            />
+          )}
+
           <MessageList
             messages={history.messages}
             myId={me?.id}

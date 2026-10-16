@@ -52,6 +52,13 @@ When a conversation has piled up and you want to remember what was being
 discussed, you press a summarize button and the app describes what the
 conversation has been about. Like translation, this is on demand only.
 
+- Group chats only. A one-to-one chat is short enough to read.
+- Each group keeps one saved summary, shared by its members. Asking again
+  updates it from the old summary plus the messages since, so each request
+  sends only what is new and the summary covers the whole history.
+- Old details fade as the summary is rewritten. Exact questions about the past
+  are what the @Ai assistant is for.
+
 ### @Ai assistant
 
 The @Ai assistant is the next step up from the two features above: instead of
@@ -60,6 +67,9 @@ get an answer.
 
 The answer is posted publicly into the chat, so everyone in the conversation
 sees both the question and the response.
+
+Group chats only, like summaries. Translation stays available everywhere,
+since it works one message at a time.
 
 ### Group chats
 

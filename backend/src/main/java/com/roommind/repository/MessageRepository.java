@@ -45,6 +45,20 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 			Limit limit);
 
 	/**
+	 * The newest messages written after a given one — what a group's saved
+	 * summary has not seen yet. Newest first like the others, so the limit keeps
+	 * the most recent ones when more arrived than a single summary can take.
+	 */
+	@Query("""
+		select m from Message m
+		join fetch m.sender
+		where m.conversation.id = :conversationId and m.id > :after
+		order by m.id desc
+		""")
+	List<Message> findNewerThan(@Param("conversationId") Long conversationId, @Param("after") Long after,
+			Limit limit);
+
+	/**
 	 * The newest message in every conversation this person belongs to, most
 	 * recent first. This is the dashboard: one row per conversation,
 	 * ordered by how recently anything was said in it.

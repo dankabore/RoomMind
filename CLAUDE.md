@@ -51,7 +51,7 @@ Boot backend, React frontend, PostgreSQL.
   Spring Security 7**, which is newer than most model training data and
   renamed several starters. Check the docs before writing security,
   websocket or Flyway configuration.
-- Also worth checking there when the time comes: the Anthropic Java SDK,
+- Also worth checking there when the time comes: the OpenAI Java SDK,
   Flyway migration syntax, and STOMP setup.
 
 ## Documents
@@ -69,20 +69,21 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
-                 StompAuthInterceptor
+                 StompAuthInterceptor, OpenAiConfig
     controller/  AuthController, HealthController, UserController,
-                 ConversationController, MessageController
+                 ConversationController, MessageController, SummaryController
     service/     AuthService, JwtService, UserService, ConversationService,
-                 MessageService
+                 MessageService, SummaryService, AiService
     repository/  UserRepository, ConversationRepository,
-                 ConversationMemberRepository, MessageRepository
+                 ConversationMemberRepository, MessageRepository,
+                 GroupSummaryRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
                  PersonResponse, OpenDirectRequest, ConversationResponse,
                  SendMessageRequest, MessageResponse,
                  ConversationSummaryResponse, CreateGroupRequest,
                  AddMemberRequest, TransferAdminRequest, GroupResponse,
-                 GroupMemberResponse
-    entity/      User, Conversation, ConversationMember, Message
+                 GroupMemberResponse, SummaryResponse
+    entity/      User, Conversation, ConversationMember, Message, GroupSummary
     enums/       ConversationType, MemberRole
     mapper/      UserMapper, MessageMapper
 
@@ -93,7 +94,8 @@ Frontend under `frontend/src/`:
                  chat.ts (chat types and the hooks that list, fetch, page,
                  send and listen live), groups.ts (making a group and
                  changing who is in it), socket.ts (the one STOMP connection
-                 and the list of what open screens are subscribed to)
+                 and the list of what open screens are subscribed to),
+                 summary.ts (asking for a group's summary)
     pages/       DashboardPage — the signed-in home page at /, your
                  conversations and groups with a last-message preview;
                  NewGroupPage — /groups/new, name a group and pick who is in
@@ -110,7 +112,8 @@ Frontend under `frontend/src/`:
                  GroupChatHeader, GroupMembers (the member panel),
                  PersonPicker (search and pick someone, used by both group
                  screens), ConfirmDialog (the "are you sure?" question the
-                 member panel asks three times)
+                 member panel asks three times), SummaryPanel (the
+                 summary box above a group's messages)
 
 Migrations live in `backend/src/main/resources/db/migration/`.
 
@@ -289,10 +292,96 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   three group scripts (23 + 13 + 24) pass together.
 - Phase 5 is complete. Not yet, and not planned for it: an admin's account
   being deleted, which the rules assume never happens.
+- Phase 6 started: `openai-java` (OpenAI's official SDK) is installed and
+  `OpenAiConfig` exposes one shared `OpenAIClient`. The key comes from
+  `OPENAI_API_KEY` through `app.openai.api-key`; unset, the app still starts
+  and only calls to the model fail (the SDK throws before sending). The model
+  is `app.openai.model`, currently `gpt-6-luna`.
+- The project started on the Anthropic SDK and switched to OpenAI at the
+  user's choice. The switch touched only `AiService`, its config, the pom and
+  the properties. Vercel's AI SDK was considered and ruled out: it is
+  JavaScript only, so it would mean the key in the browser or a second server.
+- `SummaryService.transcript` turns the newest 200 messages into one text
+  block, oldest first, `[yyyy-MM-dd HH:mm] username: body` per line, times in
+  UTC. It reuses `findNewest`, so it is one query. 200 is a cost ceiling: every
+  message is paid for on every summary. A full 200 adds a first line saying
+  earlier messages were left out.
+- Extra lines of a multi-line message are indented four spaces, so a message
+  cannot fake a line that looks like someone else speaking.
+- `AiService` is the only class that calls the model; it takes and returns plain
+  strings, so switching provider means rewriting it and its config only.
+- `POST /api/conversations/{id}/summary` answers 200 with `{ summary }`. POST
+  because every call is a paid request to OpenAI; 200 because nothing is
+  stored. Membership is checked (404) before anything is read or sent, and an
+  empty conversation is 400 without calling the model.
+- Calls use OpenAI's Responses API: the rules go in `instructions`, the
+  transcript in `input` inside `<transcript>` tags. The rules say the
+  transcript is material to summarize, not instructions, since any member can
+  type text aimed at the model.
+- `AiService` turns every failure into a `ResponseStatusException` with a
+  message a reader can act on, and logs the real cause (`@Slf4j`, the first
+  logging in the project). 503: no key (checked before sending), key rejected
+  (401/403), rate limited, out of credit (429 with `insufficient_quota`, told
+  apart from busy). 504: timeout. 502: any other error status, unreachable,
+  refusal, or an empty answer (which would otherwise be saved and served).
+- `app.openai.timeout=30s` per attempt and `app.openai.max-retries=1`, so a
+  request waits about a minute at most. The library's defaults are 10 minutes
+  and 2 retries. It retries only timeouts, dropped connections, 429 and 5xx.
+- A timeout arrives as `OpenAIIoException` whose cause is an
+  `InterruptedIOException`; any other `OpenAIIoException` is unreachable.
+- `AiServiceTest` runs the real OpenAI client against a fake OpenAI (the JDK's
+  built-in `HttpServer` on a free port): 11 checks over each failure, the
+  retry count and the text. A copy with the timeout and quota checks broken
+  failed the three tests aimed at them.
+- Not yet run against the live backend: Docker's engine was down. Expected:
+  a summary request with no key answers 503 "AI features are not set up on
+  this server."
+- Phase 6 frontend: a Summarize button in `GroupChatHeader` opens
+  `SummaryPanel` above the messages and asks at once. The panel shows a
+  waiting note (it can take up to a minute), the backend's `detail` on error
+  with Try again, or the summary (`whitespace-pre-line`, so lists survive)
+  with Update. It scrolls inside a fixed height and closes with ✕.
+- `useSummary` is a mutation, not a query: a query would refetch on its own
+  (page open, window focus) and each fetch can be a paid call. A new request
+  clears the previous answer, so Update shows the waiting note, not the old
+  text. Direct chats have no button; the backend refuses them anyway.
+- Frontend checked with `tsc -b`, `npm run lint` and `npm run build` only. Not
+  yet clicked through in a browser: Docker's engine was down, so no backend.
+  Phase 6 is otherwise complete.
+- Summaries are group-only: `summarize` calls
+  `ConversationService.requireGroupMembership` first (made public for this),
+  so a direct conversation is 400 and a stranger 404, before anything is read.
+- Each group has at most one saved summary (`group_summaries`, keyed by
+  conversation id) with `last_message_id`, the newest message it covers.
+  Three cases: nothing saved, so summarize the newest 200; saved and nothing
+  newer, so return it with no model call; saved and newer messages, so
+  `AiService.updateSummary` gets the old summary plus up to 200 newer ones
+  (`findNewerThan`) and writes a replacement. The result is saved each time.
+- The update rules ask for a whole replacement that drops what no longer
+  matters, so the summary does not grow per request. Old details fade; exact
+  questions about the past are for @ai.
+- `group_summaries.conversation_id` is `on delete cascade`, so a group ending
+  removes its summary without the leave code knowing. `last_message_id` is
+  deliberately not a foreign key: messages are deleted before the
+  conversation, and a reference would block that.
+- `summarize` is not `@Transactional`, so no database connection is held for
+  the seconds the model takes. Two simultaneous requests both call the model
+  and the later save wins; the cost is one extra call, accepted.
+- `transcript` is now a package-private static taking the message list and a
+  note for a full batch, so it can be tested without stubbing queries.
+- Verified against a running backend with a curl script (scratchpad): 12
+  checks covering direct and stranger refusals, the empty group, a failed call
+  saving nothing, the saved summary returned without a model call, a failed
+  update leaving the row alone, and the summary deleted with its group. No
+  real model call yet: there is no `OPENAI_API_KEY` on this machine.
+- Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
+  database: `ConversationServiceTest` (the user's), `SummaryServiceTest` and
+  `AiServiceTest` (the last uses a fake OpenAI server, see above).
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
-  `V3__add_group_chats.sql` (conversation type and name, member role).
+  `V3__add_group_chats.sql` (conversation type and name, member role) and
+  `V4__create_group_summaries.sql` (one saved summary per group).
   Display name and language arrive with the profile feature.
   `ddl-auto=validate`, so entities must match migrations.
 - Email is the login identity and is stored lowercased; username is the public

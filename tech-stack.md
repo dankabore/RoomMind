@@ -28,8 +28,8 @@
 
 ## AI
 
-- Anthropic Java SDK (`com.anthropic`)
-- Claude Opus 5 (`claude-opus-5`)
+- OpenAI Java SDK (`com.openai:openai-java`), Responses API
+- GPT-6 Luna (`gpt-6-luna`)
 - No vector database, conversation history goes straight into the prompt
 
 ## Testing

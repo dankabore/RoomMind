@@ -83,13 +83,15 @@ the one above it runs.
 
 ## Phase 6 — Summarize a conversation
 
-- [ ] Add Anthropic Java SDK, API key from environment
-- [ ] Service that loads recent messages and formats them for the prompt
-- [ ] Summarize endpoint, membership checked
-- [ ] Cache the summary against the newest message id
-- [ ] Handle API failure and timeout
-- [ ] React: summarize button
-- [ ] React: summary panel with loading and error states
+- [x] Add OpenAI Java SDK, API key from environment
+- [x] Service that loads recent messages and formats them for the prompt
+- [x] Summarize endpoint, membership checked
+- [x] Summaries in group chats only
+- [x] Save each group's summary with the newest message it covers
+- [x] Update a saved summary from it plus only the newer messages
+- [x] Handle API failure and timeout
+- [x] React: summarize button
+- [x] React: summary panel with loading and error states
 
 ## Phase 7 — Translation and @Ai
 
@@ -98,7 +100,7 @@ the one above it runs.
 - [ ] Translate endpoint, target language from the caller's profile
 - [ ] Cache translations by message and language
 - [ ] React: translate button per message, toggle back to original
-- [ ] Detect `@ai` in an incoming message
+- [ ] Detect `@ai` in an incoming message, group chats only
 - [ ] Assistant service answering from conversation history
 - [ ] Save the answer as a message authored by the assistant
 - [ ] Broadcast the answer over STOMP like any other message
