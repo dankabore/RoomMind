@@ -82,9 +82,10 @@ Backend packages under `backend/src/main/java/com/roommind/`:
                  SendMessageRequest, MessageResponse,
                  ConversationSummaryResponse, CreateGroupRequest,
                  AddMemberRequest, TransferAdminRequest, GroupResponse,
-                 GroupMemberResponse, SummaryResponse
+                 GroupMemberResponse, SummaryResponse,
+                 UpdateProfileRequest
     entity/      User, Conversation, ConversationMember, Message, GroupSummary
-    enums/       ConversationType, MemberRole
+    enums/       ConversationType, MemberRole, Language
     mapper/      UserMapper, MessageMapper
 
 Frontend under `frontend/src/`:
@@ -381,9 +382,24 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
   `V3__add_group_chats.sql` (conversation type and name, member role) and
-  `V4__create_group_summaries.sql` (one saved summary per group).
-  Display name and language arrive with the profile feature.
+  `V4__create_group_summaries.sql` (one saved summary per group) and
+  `V5__add_user_profile.sql` (display name and language).
   `ddl-auto=validate`, so entities must match migrations.
+- Phase 7 profile backend: `GET /api/users/me` reads your profile and `PUT`
+  replaces it (display name and language), both 200 with `UserResponse`, which
+  `/api/auth/me` and register now also return with the two new fields.
+- `language` is the `Language` enum, ISO 639-1 codes in capitals (`EN`, `FR`,
+  `ES`, `DE`, `IT`, `PT`, `AR`, `ZH`), stored as text with a check constraint.
+  Existing accounts got `EN` from the column default; register sets it on the
+  entity, since Hibernate writes the null otherwise. A new language needs the
+  enum and a migration.
+- `displayName` is optional; blank or missing is stored as null, meaning "show
+  the username". PUT replaces both fields, so leaving it out clears it. An
+  unknown language is a 400 from Jackson before validation runs.
+- Other people do not see display names yet: `PersonResponse` and message
+  senders still carry the username only.
+- Checked with `UserServiceTest` (4 tests). Not yet run against the live
+  backend: Docker's engine was down.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the

@@ -2,6 +2,8 @@ package com.roommind.dto;
 
 import java.time.Instant;
 
+import com.roommind.enums.Language;
+
 import lombok.Builder;
 import lombok.Getter;
 
@@ -22,4 +24,9 @@ public class UserResponse {
 	private final String username;
 
 	private final Instant createdAt;
+
+	// Null when not set; the screen shows the username instead.
+	private final String displayName;
+
+	private final Language language;
 }

@@ -3,10 +3,15 @@ package com.roommind.service;
 import java.util.List;
 
 import com.roommind.dto.PersonResponse;
+import com.roommind.dto.UpdateProfileRequest;
+import com.roommind.dto.UserResponse;
+import com.roommind.entity.User;
 import com.roommind.mapper.UserMapper;
 import com.roommind.repository.UserRepository;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,5 +48,35 @@ public class UserService {
 
 		return userMapper.toPersonResponses(
 			userRepository.findByUsernameStartingWithIgnoreCaseAndIdNotOrderByUsernameAsc(prefix, currentUserId));
+	}
+
+	/**
+	 * Your own profile. Always the caller's: the id comes from the token, so
+	 * there is no way to ask for, or change, anyone else's.
+	 */
+	public UserResponse profile(String subject) {
+		return userMapper.toResponse(findCaller(subject));
+	}
+
+	/**
+	 * Replaces your display name and language. A blank display name is stored
+	 * as null, so "not set" has one form in the database and the screen only
+	 * has one case to fall back on.
+	 */
+	public UserResponse updateProfile(String subject, UpdateProfileRequest request) {
+		User user = findCaller(subject);
+
+		String displayName = request.getDisplayName() == null ? "" : request.getDisplayName().trim();
+		user.setDisplayName(displayName.isEmpty() ? null : displayName);
+		user.setLanguage(request.getLanguage());
+
+		return userMapper.toResponse(userRepository.save(user));
+	}
+
+	// A valid token for a deleted account: the same 401 /api/auth/me gives, so
+	// the screen sends the person back to log in.
+	private User findCaller(String subject) {
+		return userRepository.findById(Long.valueOf(subject))
+			.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "This account no longer exists."));
 	}
 }

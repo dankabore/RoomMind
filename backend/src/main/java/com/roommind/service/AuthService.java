@@ -8,6 +8,7 @@ import com.roommind.dto.RegisterRequest;
 import com.roommind.dto.TokenResponse;
 import com.roommind.dto.UserResponse;
 import com.roommind.entity.User;
+import com.roommind.enums.Language;
 import com.roommind.mapper.UserMapper;
 import com.roommind.repository.UserRepository;
 
@@ -54,6 +55,9 @@ public class AuthService {
 			.username(request.getUsername())
 			.passwordHash(passwordEncoder.encode(request.getPassword()))
 			.createdAt(Instant.now())
+			// The column has a default, but Hibernate writes every field, null
+			// included, so the entity has to carry the value itself.
+			.language(Language.EN)
 			.build();
 
 		return userMapper.toResponse(userRepository.save(user));

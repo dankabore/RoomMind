@@ -95,7 +95,7 @@ the one above it runs.
 
 ## Phase 7 — Translation and @Ai
 
-- [ ] Profile endpoint to read and update display name and language
+- [x] Profile endpoint to read and update display name and language
 - [ ] React: profile page
 - [ ] Translate endpoint, target language from the caller's profile
 - [ ] Cache translations by message and language
