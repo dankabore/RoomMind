@@ -57,6 +57,12 @@ function DashboardPage() {
             >
               New message
             </Link>
+            <Link
+              to="/profile"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Profile
+            </Link>
             <LogoutButton />
           </div>
         </div>

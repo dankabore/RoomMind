@@ -9,6 +9,7 @@ import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
 import NewGroupPage from './pages/NewGroupPage'
 import PeoplePage from './pages/PeoplePage'
+import ProfilePage from './pages/ProfilePage'
 import RegisterPage from './pages/RegisterPage'
 import './index.css'
 
@@ -42,6 +43,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             element={
               <RequireAuth>
                 <ChatPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireAuth>
+                <ProfilePage />
               </RequireAuth>
             }
           />

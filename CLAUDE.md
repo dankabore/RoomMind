@@ -96,12 +96,14 @@ Frontend under `frontend/src/`:
                  send and listen live), groups.ts (making a group and
                  changing who is in it), socket.ts (the one STOMP connection
                  and the list of what open screens are subscribed to),
-                 summary.ts (asking for a group's summary)
+                 summary.ts (asking for a group's summary), profile.ts
+                 (the language list and reading and saving your profile)
     pages/       DashboardPage — the signed-in home page at /, your
                  conversations and groups with a last-message preview;
                  NewGroupPage — /groups/new, name a group and pick who is in
                  it; GroupChatPage — /group/<conversation id>, one group with
-                 its member panel;
+                 its member panel; ProfilePage — /profile, display name and
+                 language;
                  LoginPage, RegisterPage — state, validation rules, submit;
                  PeoplePage — the searchable list of everyone;
                  ChatPage — one conversation, at /chat/<other user id>; only
@@ -400,6 +402,15 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   senders still carry the username only.
 - Checked with `UserServiceTest` (4 tests). Not yet run against the live
   backend: Docker's engine was down.
+- Phase 7 profile page: `/profile`, linked from the home page header. Username
+  and email are shown, not editable. Save is disabled until something differs
+  from what is saved, and "Saved." shows until the next edit. The dropdown names
+  each language in itself first (`Français (French)`); the list lives in
+  `lib/profile.ts` and must match the backend enum.
+- A save writes the answer into both the `profile` and `me` caches, so they
+  never disagree. The display name input is not `TextField`, which marks every
+  field required for screen readers.
+- Checked with `tsc -b`, lint and build only. Not clicked through: no backend.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the
