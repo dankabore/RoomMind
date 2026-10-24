@@ -97,8 +97,8 @@ the one above it runs.
 
 - [x] Profile endpoint to read and update display name and language
 - [x] React: profile page
-- [ ] Translate endpoint, target language from the caller's profile
-- [ ] Cache translations by message and language
+- [x] Translate endpoint, target language from the caller's profile
+- [x] Cache translations by message and language
 - [ ] React: translate button per message, toggle back to original
 - [ ] Detect `@ai` in an incoming message, group chats only
 - [ ] Assistant service answering from conversation history

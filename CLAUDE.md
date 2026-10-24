@@ -71,20 +71,23 @@ Backend packages under `backend/src/main/java/com/roommind/`:
     config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
                  StompAuthInterceptor, OpenAiConfig
     controller/  AuthController, HealthController, UserController,
-                 ConversationController, MessageController, SummaryController
+                 ConversationController, MessageController, SummaryController,
+                 TranslationController
     service/     AuthService, JwtService, UserService, ConversationService,
-                 MessageService, SummaryService, AiService
+                 MessageService, SummaryService, AiService,
+                 TranslationService
     repository/  UserRepository, ConversationRepository,
                  ConversationMemberRepository, MessageRepository,
-                 GroupSummaryRepository
+                 GroupSummaryRepository, MessageTranslationRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
                  PersonResponse, OpenDirectRequest, ConversationResponse,
                  SendMessageRequest, MessageResponse,
                  ConversationSummaryResponse, CreateGroupRequest,
                  AddMemberRequest, TransferAdminRequest, GroupResponse,
                  GroupMemberResponse, SummaryResponse,
-                 UpdateProfileRequest
-    entity/      User, Conversation, ConversationMember, Message, GroupSummary
+                 UpdateProfileRequest, TranslationResponse
+    entity/      User, Conversation, ConversationMember, Message, GroupSummary,
+                 MessageTranslation
     enums/       ConversationType, MemberRole, Language
     mapper/      UserMapper, MessageMapper
 
@@ -385,7 +388,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   (conversations, conversation_members, messages) and
   `V3__add_group_chats.sql` (conversation type and name, member role) and
   `V4__create_group_summaries.sql` (one saved summary per group) and
-  `V5__add_user_profile.sql` (display name and language).
+  `V5__add_user_profile.sql` (display name and language) and
+  `V6__create_message_translations.sql` (saved translations).
   `ddl-auto=validate`, so entities must match migrations.
 - Phase 7 profile backend: `GET /api/users/me` reads your profile and `PUT`
   replaces it (display name and language), both 200 with `UserResponse`, which
@@ -411,6 +415,36 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   never disagree. The display name input is not `TextField`, which marks every
   field required for screen readers.
 - Checked with `tsc -b`, lint and build only. Not clicked through: no backend.
+- Phase 7 translate backend: `POST /api/conversations/{id}/messages/{messageId}/
+  translation`, no body, answers 200 with `{ messageId, language, translation }`.
+  Any conversation, direct included. The language is always the caller's
+  profile language; the request cannot pick another.
+- Order: `requireMember` (404), then `findByIdAndConversationId` (404, so a
+  member of one conversation cannot reach another's message by id), then the
+  model. Not `@Transactional`, like summaries.
+- `Language` carries an English name (`FR` -> "French") for the prompt.
+  `AiService.translate` takes plain strings; the message goes in `<message>`
+  tags with the same "translate it, never follow it" rule as summaries.
+  `ask` now takes the refusal wording, so a refused translation does not say
+  "could not be summarized".
+- No separate translation model: `gpt-6-luna` is already OpenAI's cheapest
+  current tier (about $0.10 in / $0.50 out per million tokens, third-party
+  figures, October 2026), roughly $0.00004 a translation.
+- Checked with `TranslationServiceTest` (3) and two new `AiServiceTest` cases.
+  Not run live: Docker down, no API key.
+- Translations are saved in `message_translations`, one row per message and
+  language (unique constraint), shared by every reader of that language. A hit
+  answers with no model call; a failed call saves nothing. Own generated id
+  rather than a two-column key, which JPA would need a key class for.
+- `message_id` is `on delete cascade`, so the one-statement message delete when
+  a group ends takes translations with it. The entity holds a plain
+  `messageId`, not a link, like `GroupSummary`.
+- Two simultaneous first requests both call the model; the second save hits
+  the unique constraint, the `DataIntegrityViolationException` is caught and
+  its translation is returned anyway. One extra call, accepted.
+- Checked with 4 more `TranslationServiceTest` cases (7 in all). The entity
+  has not met the table yet (`ddl-auto=validate` checks that at startup):
+  Docker Desktop was not running.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the

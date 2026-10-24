@@ -1,5 +1,8 @@
 package com.roommind.enums;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+
 /**
  * The languages a person can choose to read in. Translation reads it from the
  * reader's profile to know what to translate into.
@@ -11,21 +14,30 @@ package com.roommind.enums;
  * Stored as text, for the same reason as ConversationType. Adding a language
  * needs a new migration as well, since the users table checks the value.
  */
+@Getter
+@RequiredArgsConstructor
 public enum Language {
 
-	EN,
+	EN("English"),
 
-	FR,
+	FR("French"),
 
-	ES,
+	ES("Spanish"),
 
-	DE,
+	DE("German"),
 
-	IT,
+	IT("Italian"),
 
-	PT,
+	PT("Portuguese"),
 
-	AR,
+	AR("Arabic"),
 
-	ZH
+	ZH("Chinese");
+
+	/**
+	 * What the model is told to translate into. A name rather than the code,
+	 * because "translate into French" leaves the model nothing to guess.
+	 * The JSON and the database still use the code.
+	 */
+	private final String englishName;
 }

@@ -48,6 +48,9 @@ class AiServiceTest {
 
 	private final AtomicInteger requests = new AtomicInteger();
 
+	// The body of the last request, to check what was sent.
+	private volatile String lastRequest;
+
 	@BeforeEach
 	void startFakeOpenAi() throws IOException {
 		server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
@@ -146,6 +149,29 @@ class AiServiceTest {
 	}
 
 	@Test
+	void aTranslationNamesTheLanguageAndWrapsTheMessage() {
+		replyWith(200, reply("""
+			{"type": "output_text", "text": "On est toujours partants pour vendredi ?", "annotations": []}
+			"""));
+
+		assertThat(service().translate("are we still on for friday?", "French"))
+			.isEqualTo("On est toujours partants pour vendredi ?");
+		assertThat(lastRequest)
+			.contains("You translate chat messages into French.")
+			.contains("<message>\\nare we still on for friday?\\n</message>");
+	}
+
+	@Test
+	void aRefusedTranslationSaysTranslatedNotSummarized() {
+		replyWith(200, reply("""
+			{"type": "refusal", "refusal": "I can't help with that."}
+			"""));
+
+		assertFails(() -> service().translate("hello", "French"), HttpStatus.BAD_GATEWAY,
+				"This message could not be translated.");
+	}
+
+	@Test
 	void anEmptyAnswerIsNotReturnedAsASummary() {
 		replyWith(200, reply("""
 			{"type": "output_text", "text": "   ", "annotations": []}
@@ -191,6 +217,7 @@ class AiServiceTest {
 
 	private void answer(HttpExchange exchange) throws IOException {
 		requests.incrementAndGet();
+		lastRequest = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
 		try {
 			Thread.sleep(delayMillis);
 		} catch (InterruptedException e) {
