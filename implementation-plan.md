@@ -99,7 +99,7 @@ the one above it runs.
 - [x] React: profile page
 - [x] Translate endpoint, target language from the caller's profile
 - [x] Cache translations by message and language
-- [ ] React: translate button per message, toggle back to original
+- [x] React: translate button per message, toggle back to original
 - [ ] Detect `@ai` in an incoming message, group chats only
 - [ ] Assistant service answering from conversation history
 - [ ] Save the answer as a message authored by the assistant

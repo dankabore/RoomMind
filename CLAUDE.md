@@ -100,7 +100,8 @@ Frontend under `frontend/src/`:
                  changing who is in it), socket.ts (the one STOMP connection
                  and the list of what open screens are subscribed to),
                  summary.ts (asking for a group's summary), profile.ts
-                 (the language list and reading and saving your profile)
+                 (the language list and reading and saving your profile),
+                 translation.ts (asking for one message's translation)
     pages/       DashboardPage — the signed-in home page at /, your
                  conversations and groups with a last-message preview;
                  NewGroupPage — /groups/new, name a group and pick who is in
@@ -113,7 +114,7 @@ Frontend under `frontend/src/`:
                  resolves the conversation and wires lib/chat to components
     components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth,
                  Avatar, ChatHeader, MessageList (owns the scroll
-                 corrections), MessageComposer (owns the draft text),
+                 corrections and each bubble's Translate toggle), MessageComposer (owns the draft text),
                  LogoutButton (the button and its confirmation dialog),
                  GroupChatHeader, GroupMembers (the member panel),
                  PersonPicker (search and pick someone, used by both group
@@ -445,6 +446,19 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - Checked with 4 more `TranslationServiceTest` cases (7 in all). The entity
   has not met the table yet (`ddl-auto=validate` checks that at startup):
   Docker Desktop was not running.
+- Phase 7 translate button: each bubble in `MessageList` that is not yours has
+  Translate beside its time, in direct chats and groups alike, so neither page
+  changed. The bubble asks once (`useTranslateMessage`, a mutation like
+  summaries) and keeps the answer, so Show original / Show translation only
+  switches text. A reopened page asks again and gets the backend's saved copy.
+- While translated, "· Translated" sits beside the time. A failure shows the
+  backend's `detail` under the text and the button becomes Try again. The
+  toggle checks what is on screen, not the last press, or Try again would
+  switch back instead of retrying.
+- The scroll corrections run on message count only, so a translation that
+  makes the newest bubble taller does not re-pin the view to the bottom.
+- Checked with `tsc -b`, lint and build only. Not clicked through: Docker
+  Desktop was not running.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the
