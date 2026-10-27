@@ -3,12 +3,14 @@ package com.roommind.service;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import com.roommind.config.WebSocketConfig;
 import com.roommind.dto.MessageResponse;
 import com.roommind.dto.SendMessageRequest;
 import com.roommind.entity.Message;
 import com.roommind.entity.User;
+import com.roommind.enums.ConversationType;
 import com.roommind.mapper.MessageMapper;
 import com.roommind.repository.ConversationRepository;
 import com.roommind.repository.MessageRepository;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Writing messages into a conversation and reading them back out.
@@ -29,6 +32,7 @@ import lombok.RequiredArgsConstructor;
  * belongs in the conversation at all, so a signed-in stranger who guesses an id
  * gets nowhere.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MessageService {
@@ -39,6 +43,11 @@ public class MessageService {
 	 * conversation that may hold thousands.
 	 */
 	private static final int PAGE_SIZE = 50;
+
+	// (?<![\w@.]) : not straight after a letter, digit, _, @ or dot.
+	// @ai\b       : "@ai", then the end of the word.
+	// Compiled once, since every sent message is checked against it.
+	private static final Pattern AI_MENTION = Pattern.compile("(?<![\\w@.])@ai\\b", Pattern.CASE_INSENSITIVE);
 
 	private final MessageRepository messageRepository;
 
@@ -85,7 +94,39 @@ public class MessageService {
 		// before the commit and would need to wait for it.
 		messagingTemplate.convertAndSend(WebSocketConfig.CONVERSATION_TOPIC + conversationId, response);
 
+		// After the push, so the question is on everyone's screen before any
+		// answer could be. For now this only notes it: answering is the
+		// assistant's job, which is the next step.
+		if (asksAssistant(conversationId, message.getBody())) {
+			log.info("@ai asked in conversation {} by message {}", conversationId, response.getId());
+		}
+
 		return response;
+	}
+
+	/**
+	 * Whether this message is a question for the assistant: it mentions @ai and
+	 * was sent in a group. A direct conversation is left alone, @ai or not, as
+	 * the project scope says.
+	 *
+	 * The text is checked first, because it costs nothing; the group check is a
+	 * query, so almost every message never makes it.
+	 */
+	private boolean asksAssistant(Long conversationId, String body) {
+		return mentionsAi(body) && conversationRepository.existsByIdAndType(conversationId, ConversationType.GROUP);
+	}
+
+	/**
+	 * Whether `@ai` appears as a mention of its own, in any case: "@ai", "@AI,"
+	 * and "hey @Ai what did we decide?" all count.
+	 *
+	 * The two edges are what keep it from firing by accident. Nothing that could
+	 * be part of a word or an address may come before the @, so "bob@ai.com" is
+	 * not a mention; and the word must end after "ai", so "@aisha" is not one
+	 * either.
+	 */
+	static boolean mentionsAi(String body) {
+		return AI_MENTION.matcher(body).find();
 	}
 
 	/**

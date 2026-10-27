@@ -382,7 +382,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   update leaving the row alone, and the summary deleted with its group. No
   real model call yet: there is no `OPENAI_API_KEY` on this machine.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
-  database: `ConversationServiceTest` (the user's), `SummaryServiceTest` and
+  database: `ConversationServiceTest` (the user's), `SummaryServiceTest`,
+  `UserServiceTest`, `TranslationServiceTest`, `MessageServiceTest` and
   `AiServiceTest` (the last uses a fake OpenAI server, see above).
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
@@ -459,6 +460,16 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   makes the newest bubble taller does not re-pin the view to the bottom.
 - Checked with `tsc -b`, lint and build only. Not clicked through: Docker
   Desktop was not running.
+- Phase 7 @ai detection: `MessageService.send`, after the save and the push,
+  checks `mentionsAi(body)` and then `existsByIdAndType(id, GROUP)`. The text
+  test runs first so ordinary messages cost no extra query. The group check
+  is a query because `send` holds only a `getReferenceById` stand-in, whose
+  type cannot be read outside a transaction. For now a hit is only logged;
+  the assistant replaces that line.
+- A mention is `(?<![\w@.])@ai\b`, any case: "@AI," and "(@ai)" count,
+  "bob@ai.com", "@aisha", "@ai_bot" and plain "ai" do not.
+- `MessageServiceTest` (4): the mention cases both ways, and that the group
+  query runs only for a mention.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the

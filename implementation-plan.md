@@ -100,7 +100,7 @@ the one above it runs.
 - [x] Translate endpoint, target language from the caller's profile
 - [x] Cache translations by message and language
 - [x] React: translate button per message, toggle back to original
-- [ ] Detect `@ai` in an incoming message, group chats only
+- [x] Detect `@ai` in an incoming message, group chats only
 - [ ] Assistant service answering from conversation history
 - [ ] Save the answer as a message authored by the assistant
 - [ ] Broadcast the answer over STOMP like any other message
