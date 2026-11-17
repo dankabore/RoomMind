@@ -16,6 +16,7 @@ import com.roommind.repository.ConversationRepository;
 import com.roommind.repository.MessageRepository;
 import com.roommind.repository.UserRepository;
 
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.data.domain.Limit;
 import org.springframework.http.HttpStatus;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Writing messages into a conversation and reading them back out.
@@ -31,6 +33,7 @@ import lombok.RequiredArgsConstructor;
  * belongs in the conversation at all, so a signed-in stranger who guesses an id
  * gets nowhere.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MessageService {
@@ -98,7 +101,14 @@ public class MessageService {
 		// answer could be. The call returns at once: the assistant works in the
 		// background and its answer arrives later, as a message of its own.
 		if (asksAssistant(conversationId, message.getBody())) {
-			assistantService.answer(conversationId, sender.getUsername(), message.getBody());
+			try {
+				assistantService.answer(conversationId, sender.getUsername(), message.getBody());
+			} catch (TaskRejectedException e) {
+				// Every assistant thread is busy and the queue is full. The message
+				// itself is saved and pushed, so the send still succeeds; only the
+				// answer is skipped.
+				log.warn("Assistant queue full; question in conversation {} not answered", conversationId);
+			}
 		}
 
 		return response;

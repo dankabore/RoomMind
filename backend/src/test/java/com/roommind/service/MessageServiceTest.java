@@ -19,12 +19,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -124,6 +127,17 @@ class MessageServiceTest {
 		messageService.send("7", 5L, request("@ai what did we decide?"));
 
 		verifyNoInteractions(assistantService);
+	}
+
+	@Test
+	void aFullAssistantQueueStillSendsTheMessage() {
+		givenSendable();
+		given(conversationRepository.existsByIdAndType(5L, ConversationType.GROUP)).willReturn(true);
+		willThrow(new TaskRejectedException("full")).given(assistantService).answer(anyLong(), anyString(), anyString());
+
+		MessageResponse response = messageService.send("7", 5L, request("@ai what did we decide?"));
+
+		assertThat(response.getId()).isEqualTo(30L);
 	}
 
 	private void givenSendable() {

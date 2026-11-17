@@ -476,8 +476,8 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   characters; password hash `!`, so no login matches). A partial unique index
   allows one. Its answers are ordinary messages sent from that account, so
   history, paging, the dashboard, translation and STOMP needed no change.
-- `AssistantService.answer` is `@Async` (`AsyncConfig` has `@EnableAsync`, on
-  Boot's default executor): `send` returns at once and the answer arrives
+- `AssistantService.answer` is `@Async` (`AsyncConfig` has `@EnableAsync` and
+  its own `taskExecutor` pool): `send` returns at once and the answer arrives
   later over `/topic/conversations/<id>`. It reads the newest 200 messages
   with `SummaryService.transcript`, calls `AiService.answer`, then saves and
   pushes itself, not through `MessageService.send`, so an answer containing
@@ -498,10 +498,24 @@ Migrations live in `backend/src/main/resources/db/migration/`.
 - No limit on how often @ai can be asked, and no "thinking" indicator. Each
   question is a paid call with up to 200 messages; cap it before going public.
 - Checked with `AssistantServiceTest` (5), two more `MessageServiceTest` cases
-  and one `AiServiceTest` case: 47 unit tests. Frontend by `tsc -b`, lint and
-  build. Not run live (V5 to V7 have never met a database, and `@Async` only
-  takes effect in the running app): Docker Desktop was not running.
+  and one `AiServiceTest` case: 47 unit tests (48 with the full-queue case
+  added later). Frontend by `tsc -b`, lint and
+  build.
 - Phase 7 is complete.
+- Phase 7 run live (Phase 8 step 0): V5 to V7 applied and passed `validate`.
+  A Node script (scratchpad) made 34 checks with no key: profile rules, the
+  assistant account (no login, not listed, one only), translation 503 / 404s /
+  a hand-inserted row served from the cache / the cascade, and @ai answered
+  over STOMP in groups only. With a fake key, OpenAI's real 401 became "not
+  set up correctly" and the answer ran off the request thread.
+- That run found a bug: the websocket broker declares four thread pools, so
+  Boot does not create its own, and `@Async` fell back to
+  `SimpleAsyncTaskExecutor` — a new thread per question, unbounded.
+  `AsyncConfig` now declares `taskExecutor` (4 threads, 20 queued, named
+  `assistant-`). A full queue throws `TaskRejectedException`, which `send`
+  catches and logs: the message still sends, the question goes unanswered.
+- Still not done: a browser click-through of the Phase 7 screens, and any
+  real model answer (no key yet).
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the
