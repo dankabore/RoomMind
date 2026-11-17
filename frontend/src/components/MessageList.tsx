@@ -180,11 +180,22 @@ function Bubble({
       <div
         className={[
           'max-w-[75%] rounded-2xl px-4 py-2',
-          mine ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 shadow-sm',
+          mine
+            ? 'bg-slate-900 text-white'
+            : message.fromAssistant
+              ? // Tinted and outlined, so an answer from the assistant is never
+                // read as something a person in the group said.
+                'bg-indigo-50 text-slate-900 ring-1 ring-indigo-200'
+              : 'bg-white text-slate-900 shadow-sm',
         ].join(' ')}
       >
-        {showSender && (
-          <p className="mb-0.5 text-xs font-medium text-slate-500">{message.senderUsername}</p>
+        {message.fromAssistant ? (
+          // Always labelled, and by what it is, not by its account's username.
+          <p className="mb-0.5 text-xs font-semibold text-indigo-600">
+            <span aria-hidden>✦ </span>AI assistant
+          </p>
+        ) : (
+          showSender && <p className="mb-0.5 text-xs font-medium text-slate-500">{message.senderUsername}</p>
         )}
 
         {/* break-words stops one long unbroken string from widening the bubble

@@ -69,13 +69,13 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
-                 StompAuthInterceptor, OpenAiConfig
+                 StompAuthInterceptor, OpenAiConfig, AsyncConfig
     controller/  AuthController, HealthController, UserController,
                  ConversationController, MessageController, SummaryController,
                  TranslationController
     service/     AuthService, JwtService, UserService, ConversationService,
                  MessageService, SummaryService, AiService,
-                 TranslationService
+                 TranslationService, AssistantService
     repository/  UserRepository, ConversationRepository,
                  ConversationMemberRepository, MessageRepository,
                  GroupSummaryRepository, MessageTranslationRepository
@@ -383,15 +383,16 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   real model call yet: there is no `OPENAI_API_KEY` on this machine.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
   database: `ConversationServiceTest` (the user's), `SummaryServiceTest`,
-  `UserServiceTest`, `TranslationServiceTest`, `MessageServiceTest` and
-  `AiServiceTest` (the last uses a fake OpenAI server, see above).
+  `UserServiceTest`, `TranslationServiceTest`, `MessageServiceTest`,
+  `AssistantServiceTest` and `AiServiceTest` (the last uses a fake OpenAI server, see above).
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
   `V3__add_group_chats.sql` (conversation type and name, member role) and
   `V4__create_group_summaries.sql` (one saved summary per group) and
   `V5__add_user_profile.sql` (display name and language) and
-  `V6__create_message_translations.sql` (saved translations).
+  `V6__create_message_translations.sql` (saved translations) and
+  `V7__add_assistant_account.sql` (the assistant's account).
   `ddl-auto=validate`, so entities must match migrations.
 - Phase 7 profile backend: `GET /api/users/me` reads your profile and `PUT`
   replaces it (display name and language), both 200 with `UserResponse`, which
@@ -464,12 +465,43 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   checks `mentionsAi(body)` and then `existsByIdAndType(id, GROUP)`. The text
   test runs first so ordinary messages cost no extra query. The group check
   is a query because `send` holds only a `getReferenceById` stand-in, whose
-  type cannot be read outside a transaction. For now a hit is only logged;
-  the assistant replaces that line.
+  type cannot be read outside a transaction. A hit calls
+  `AssistantService.answer`.
 - A mention is `(?<![\w@.])@ai\b`, any case: "@AI," and "(@ai)" count,
   "bob@ai.com", "@aisha", "@ai_bot" and plain "ai" do not.
 - `MessageServiceTest` (4): the mention cases both ways, and that the group
   query runs only for a mention.
+- Phase 7 assistant: the assistant is a row in `users` with `assistant = true`
+  (V7: username `ai`, which registration cannot take since it needs three
+  characters; password hash `!`, so no login matches). A partial unique index
+  allows one. Its answers are ordinary messages sent from that account, so
+  history, paging, the dashboard, translation and STOMP needed no change.
+- `AssistantService.answer` is `@Async` (`AsyncConfig` has `@EnableAsync`, on
+  Boot's default executor): `send` returns at once and the answer arrives
+  later over `/topic/conversations/<id>`. It reads the newest 200 messages
+  with `SummaryService.transcript`, calls `AiService.answer`, then saves and
+  pushes itself, not through `MessageService.send`, so an answer containing
+  "@ai" cannot trigger another.
+- A failed call is posted into the chat as the assistant ("Sorry, I could not
+  answer that. " plus `AiService`'s reason), since no HTTP response is
+  waiting. A failed save (group ended meanwhile) is logged only. Answers are
+  cut to 4000 characters.
+- The prompt puts who asked in `<asked_by>`, the question in `<question>` and
+  the history in `<transcript>`; the transcript is material, and the question
+  cannot change the rules. Answers in the question's language.
+- `MessageResponse.fromAssistant` (mapped from `sender.assistant`) is how the
+  screen knows; `MessageList` draws those bubbles tinted indigo with an
+  "AI assistant" label in place of the username.
+- The people list leaves the assistant out (`...AndAssistantFalse...`). Its id
+  could still be added to a group or opened as a direct chat by a hand-written
+  request; nothing breaks, it just never speaks there unasked.
+- No limit on how often @ai can be asked, and no "thinking" indicator. Each
+  question is a paid call with up to 200 messages; cap it before going public.
+- Checked with `AssistantServiceTest` (5), two more `MessageServiceTest` cases
+  and one `AiServiceTest` case: 47 unit tests. Frontend by `tsc -b`, lint and
+  build. Not run live (V5 to V7 have never met a database, and `@Async` only
+  takes effect in the running app): Docker Desktop was not running.
+- Phase 7 is complete.
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the

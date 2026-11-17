@@ -162,6 +162,21 @@ class AiServiceTest {
 	}
 
 	@Test
+	void anAnswerSendsWhoAskedTheQuestionAndTheTranscript() {
+		replyWith(200, reply("""
+			{"type": "output_text", "text": "Friday at 7pm.", "annotations": []}
+			"""));
+
+		assertThat(service().answer("alice", "@ai when are we meeting?", "[14:05] bob: friday at 7pm\n"))
+			.isEqualTo("Friday at 7pm.");
+		assertThat(lastRequest)
+			.contains("You are the assistant in a group chat.")
+			.contains("<asked_by>alice</asked_by>")
+			.contains("<question>\\n@ai when are we meeting?\\n</question>")
+			.contains("<transcript>\\n[14:05] bob: friday at 7pm\\n</transcript>");
+	}
+
+	@Test
 	void aRefusedTranslationSaysTranslatedNotSummarized() {
 		replyWith(200, reply("""
 			{"type": "refusal", "refusal": "I can't help with that."}

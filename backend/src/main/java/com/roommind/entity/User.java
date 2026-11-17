@@ -60,4 +60,9 @@ public class User {
 	@Enumerated(EnumType.STRING)
 	@Column(name = "language", nullable = false, length = 5)
 	private Language language;
+
+	// True for exactly one account: the one the @ai assistant's answers are
+	// sent from. Created by a migration, never by registering.
+	@Column(name = "assistant", nullable = false)
+	private boolean assistant;
 }

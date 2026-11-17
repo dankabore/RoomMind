@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Spotting a question for the assistant. Firing on the wrong message would
@@ -53,6 +54,9 @@ class MessageServiceTest {
 
 	@Mock
 	private SimpMessagingTemplate messagingTemplate;
+
+	@Mock
+	private AssistantService assistantService;
 
 	@InjectMocks
 	private MessageService messageService;
@@ -97,6 +101,29 @@ class MessageServiceTest {
 		messageService.send("7", 5L, request("@ai what did we decide?"));
 
 		verify(conversationRepository).existsByIdAndType(5L, ConversationType.GROUP);
+	}
+
+	// When the assistant is asked.
+
+	@Test
+	void aMentionInAGroupAsksTheAssistant() {
+		givenSendable();
+		given(conversationRepository.existsByIdAndType(5L, ConversationType.GROUP)).willReturn(true);
+
+		messageService.send("7", 5L, request("  @ai what did we decide?  "));
+
+		// The trimmed text, as it was saved, and who asked.
+		verify(assistantService).answer(5L, "alice", "@ai what did we decide?");
+	}
+
+	@Test
+	void aMentionInADirectChatIsJustAMessage() {
+		givenSendable();
+		given(conversationRepository.existsByIdAndType(5L, ConversationType.GROUP)).willReturn(false);
+
+		messageService.send("7", 5L, request("@ai what did we decide?"));
+
+		verifyNoInteractions(assistantService);
 	}
 
 	private void givenSendable() {

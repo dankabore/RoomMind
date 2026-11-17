@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 /**
  * Writing messages into a conversation and reading them back out.
@@ -32,7 +31,6 @@ import lombok.extern.slf4j.Slf4j;
  * belongs in the conversation at all, so a signed-in stranger who guesses an id
  * gets nowhere.
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MessageService {
@@ -58,6 +56,8 @@ public class MessageService {
 	private final ConversationService conversationService;
 
 	private final MessageMapper messageMapper;
+
+	private final AssistantService assistantService;
 
 	// Publishes to a websocket address. Everyone subscribed to that address gets
 	// a copy; nobody else does.
@@ -95,10 +95,10 @@ public class MessageService {
 		messagingTemplate.convertAndSend(WebSocketConfig.CONVERSATION_TOPIC + conversationId, response);
 
 		// After the push, so the question is on everyone's screen before any
-		// answer could be. For now this only notes it: answering is the
-		// assistant's job, which is the next step.
+		// answer could be. The call returns at once: the assistant works in the
+		// background and its answer arrives later, as a message of its own.
 		if (asksAssistant(conversationId, message.getBody())) {
-			log.info("@ai asked in conversation {} by message {}", conversationId, response.getId());
+			assistantService.answer(conversationId, sender.getUsername(), message.getBody());
 		}
 
 		return response;

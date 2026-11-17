@@ -101,10 +101,10 @@ the one above it runs.
 - [x] Cache translations by message and language
 - [x] React: translate button per message, toggle back to original
 - [x] Detect `@ai` in an incoming message, group chats only
-- [ ] Assistant service answering from conversation history
-- [ ] Save the answer as a message authored by the assistant
-- [ ] Broadcast the answer over STOMP like any other message
-- [ ] React: render assistant messages distinctly
+- [x] Assistant service answering from conversation history
+- [x] Save the answer as a message authored by the assistant
+- [x] Broadcast the answer over STOMP like any other message
+- [x] React: render assistant messages distinctly
 
 ## Phase 8 — Deployed and demoable
 

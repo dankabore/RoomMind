@@ -47,7 +47,7 @@ public class UserService {
 		String prefix = search == null ? "" : search.trim();
 
 		return userMapper.toPersonResponses(
-			userRepository.findByUsernameStartingWithIgnoreCaseAndIdNotOrderByUsernameAsc(prefix, currentUserId));
+			userRepository.findByUsernameStartingWithIgnoreCaseAndIdNotAndAssistantFalseOrderByUsernameAsc(prefix, currentUserId));
 	}
 
 	/**

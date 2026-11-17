@@ -30,6 +30,8 @@ export type Message = {
   senderUsername: string
   body: string
   createdAt: string
+  /** True when the @ai assistant wrote it, so it can be drawn differently. */
+  fromAssistant: boolean
 }
 
 /**
