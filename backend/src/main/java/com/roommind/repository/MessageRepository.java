@@ -1,6 +1,7 @@
 package com.roommind.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import com.roommind.entity.Message;
 
@@ -11,6 +12,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface MessageRepository extends JpaRepository<Message, Long> {
+
+	/**
+	 * One message, but only if it belongs to the given conversation. Membership
+	 * is checked on the conversation, so without the second condition a member
+	 * of one conversation could reach a message in another by its id.
+	 */
+	Optional<Message> findByIdAndConversationId(Long id, Long conversationId);
 
 	/**
 	 * The newest messages in a conversation.

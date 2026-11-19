@@ -27,4 +27,8 @@ public class MessageResponse {
 	private final String body;
 
 	private final Instant createdAt;
+
+	// True when the @ai assistant wrote this, so the screen can draw it
+	// differently without recognising a particular username.
+	private final boolean fromAssistant;
 }

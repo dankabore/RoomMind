@@ -13,7 +13,7 @@ import org.mapstruct.Mapping;
  *
  * Still a straight copy, just from one level down: the sender's id and name are
  * read through the message's link to their account rather than off the message
- * itself. The three @Mapping lines only spell out those paths — nothing is
+ * itself. The four @Mapping lines only spell out those paths — nothing is
  * calculated, renamed in meaning, or ignored.
  *
  * Callers must load messages with the sender joined in. These paths read that
@@ -26,6 +26,7 @@ public interface MessageMapper {
 	@Mapping(target = "conversationId", source = "conversation.id")
 	@Mapping(target = "senderId", source = "sender.id")
 	@Mapping(target = "senderUsername", source = "sender.username")
+	@Mapping(target = "fromAssistant", source = "sender.assistant")
 	MessageResponse toResponse(Message message);
 
 	List<MessageResponse> toResponses(List<Message> messages);

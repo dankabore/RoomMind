@@ -1,5 +1,7 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { errorMessage } from '../lib/api'
 import type { Message } from '../lib/chat'
+import { useTranslateMessage } from '../lib/translation'
 
 type MessageListProps = {
   /** The conversation so far, oldest first. */
@@ -140,24 +142,93 @@ function Bubble({
   mine: boolean
   showSender?: boolean
 }) {
+  const translate = useTranslateMessage(message.conversationId, message.id)
+  // Which text is on screen. The original is always kept, so switching back
+  // is only a matter of which one to draw.
+  const [translated, setTranslated] = useState(false)
+  // The translation on screen, or undefined while the original is.
+  const translation = translated ? translate.data?.translation : undefined
+  const showingTranslation = translation !== undefined
+
+  function handleTranslateClick() {
+    // Checks what is on screen, not what was last pressed: after a failed
+    // attempt nothing is translated yet, so the press means "try again".
+    if (showingTranslation) {
+      setTranslated(false)
+      return
+    }
+    setTranslated(true)
+    // Asked for once. After that the answer is in hand and the button only
+    // switches between the two texts.
+    if (translate.data === undefined) {
+      translate.mutate()
+    }
+  }
+
+  const translateLabel = translate.isPending
+    ? 'Translating…'
+    : showingTranslation
+      ? 'Show original'
+      : translate.error
+        ? 'Try again'
+        : translate.data
+          ? 'Show translation'
+          : 'Translate'
+
   return (
     <div className={mine ? 'flex justify-end' : 'flex justify-start'}>
       <div
         className={[
           'max-w-[75%] rounded-2xl px-4 py-2',
-          mine ? 'bg-slate-900 text-white' : 'bg-white text-slate-900 shadow-sm',
+          mine
+            ? 'bg-slate-900 text-white'
+            : message.fromAssistant
+              ? // Tinted and outlined, so an answer from the assistant is never
+                // read as something a person in the group said.
+                'bg-indigo-50 text-slate-900 ring-1 ring-indigo-200'
+              : 'bg-white text-slate-900 shadow-sm',
         ].join(' ')}
       >
-        {showSender && (
-          <p className="mb-0.5 text-xs font-medium text-slate-500">{message.senderUsername}</p>
+        {message.fromAssistant ? (
+          // Always labelled, and by what it is, not by its account's username.
+          <p className="mb-0.5 text-xs font-semibold text-indigo-600">
+            <span aria-hidden>✦ </span>AI assistant
+          </p>
+        ) : (
+          showSender && <p className="mb-0.5 text-xs font-medium text-slate-500">{message.senderUsername}</p>
         )}
 
         {/* break-words stops one long unbroken string from widening the bubble
             past the screen; whitespace-pre-wrap keeps the sender's line breaks. */}
-        <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>
-        <p className="mt-1 text-[11px] text-slate-400">
-          {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </p>
+        <p className="whitespace-pre-wrap break-words text-sm">{translation ?? message.body}</p>
+
+        {translate.error && (
+          <p className="mt-1 text-xs text-red-600">
+            {errorMessage(translate.error, 'Could not translate this message.')}
+          </p>
+        )}
+
+        <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+          <span>
+            {new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+          {/* Said beside the time, so a translated message is never mistaken
+              for what the sender actually wrote. */}
+          {showingTranslation && <span>· Translated</span>}
+
+          {/* Only on other people's messages: yours are already in words you
+              chose. */}
+          {!mine && (
+            <button
+              type="button"
+              onClick={handleTranslateClick}
+              disabled={translate.isPending}
+              className="font-medium text-slate-500 hover:text-slate-900 disabled:cursor-wait disabled:hover:text-slate-500"
+            >
+              {translateLabel}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

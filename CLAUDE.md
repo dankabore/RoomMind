@@ -69,22 +69,26 @@ Boot backend, React frontend, PostgreSQL.
 Backend packages under `backend/src/main/java/com/roommind/`:
 
     config/      SecurityConfig, JwtConfig, CorsConfig, WebSocketConfig,
-                 StompAuthInterceptor, OpenAiConfig
+                 StompAuthInterceptor, OpenAiConfig, AsyncConfig
     controller/  AuthController, HealthController, UserController,
-                 ConversationController, MessageController, SummaryController
+                 ConversationController, MessageController, SummaryController,
+                 TranslationController
     service/     AuthService, JwtService, UserService, ConversationService,
-                 MessageService, SummaryService, AiService
+                 MessageService, SummaryService, AiService,
+                 TranslationService, AssistantService
     repository/  UserRepository, ConversationRepository,
                  ConversationMemberRepository, MessageRepository,
-                 GroupSummaryRepository
+                 GroupSummaryRepository, MessageTranslationRepository
     dto/         RegisterRequest, LoginRequest, UserResponse, TokenResponse,
                  PersonResponse, OpenDirectRequest, ConversationResponse,
                  SendMessageRequest, MessageResponse,
                  ConversationSummaryResponse, CreateGroupRequest,
                  AddMemberRequest, TransferAdminRequest, GroupResponse,
-                 GroupMemberResponse, SummaryResponse
-    entity/      User, Conversation, ConversationMember, Message, GroupSummary
-    enums/       ConversationType, MemberRole
+                 GroupMemberResponse, SummaryResponse,
+                 UpdateProfileRequest, TranslationResponse
+    entity/      User, Conversation, ConversationMember, Message, GroupSummary,
+                 MessageTranslation
+    enums/       ConversationType, MemberRole, Language
     mapper/      UserMapper, MessageMapper
 
 Frontend under `frontend/src/`:
@@ -95,19 +99,22 @@ Frontend under `frontend/src/`:
                  send and listen live), groups.ts (making a group and
                  changing who is in it), socket.ts (the one STOMP connection
                  and the list of what open screens are subscribed to),
-                 summary.ts (asking for a group's summary)
+                 summary.ts (asking for a group's summary), profile.ts
+                 (the language list and reading and saving your profile),
+                 translation.ts (asking for one message's translation)
     pages/       DashboardPage — the signed-in home page at /, your
                  conversations and groups with a last-message preview;
                  NewGroupPage — /groups/new, name a group and pick who is in
                  it; GroupChatPage — /group/<conversation id>, one group with
-                 its member panel;
+                 its member panel; ProfilePage — /profile, display name and
+                 language;
                  LoginPage, RegisterPage — state, validation rules, submit;
                  PeoplePage — the searchable list of everyone;
                  ChatPage — one conversation, at /chat/<other user id>; only
                  resolves the conversation and wires lib/chat to components
     components/  AuthCard, TextField, FormMessage, SubmitButton, RequireAuth,
                  Avatar, ChatHeader, MessageList (owns the scroll
-                 corrections), MessageComposer (owns the draft text),
+                 corrections and each bubble's Translate toggle), MessageComposer (owns the draft text),
                  LogoutButton (the button and its confirmation dialog),
                  GroupChatHeader, GroupMembers (the member panel),
                  PersonPicker (search and pick someone, used by both group
@@ -375,15 +382,140 @@ Migrations live in `backend/src/main/resources/db/migration/`.
   update leaving the row alone, and the summary deleted with its group. No
   real model call yet: there is no `OPENAI_API_KEY` on this machine.
 - Unit tests in `src/test/.../service/` use Mockito, with no Spring and no
-  database: `ConversationServiceTest` (the user's), `SummaryServiceTest` and
-  `AiServiceTest` (the last uses a fake OpenAI server, see above).
+  database: `ConversationServiceTest` (the user's), `SummaryServiceTest`,
+  `UserServiceTest`, `TranslationServiceTest`, `MessageServiceTest`,
+  `AssistantServiceTest` and `AiServiceTest` (the last uses a fake OpenAI server, see above).
 - Migrations: `V1__create_users_table.sql` (id, email, username, password
   hash, created at), `V2__create_conversations_and_messages.sql`
   (conversations, conversation_members, messages) and
   `V3__add_group_chats.sql` (conversation type and name, member role) and
-  `V4__create_group_summaries.sql` (one saved summary per group).
-  Display name and language arrive with the profile feature.
+  `V4__create_group_summaries.sql` (one saved summary per group) and
+  `V5__add_user_profile.sql` (display name and language) and
+  `V6__create_message_translations.sql` (saved translations) and
+  `V7__add_assistant_account.sql` (the assistant's account).
   `ddl-auto=validate`, so entities must match migrations.
+- Phase 7 profile backend: `GET /api/users/me` reads your profile and `PUT`
+  replaces it (display name and language), both 200 with `UserResponse`, which
+  `/api/auth/me` and register now also return with the two new fields.
+- `language` is the `Language` enum, ISO 639-1 codes in capitals (`EN`, `FR`,
+  `ES`, `DE`, `IT`, `PT`, `AR`, `ZH`), stored as text with a check constraint.
+  Existing accounts got `EN` from the column default; register sets it on the
+  entity, since Hibernate writes the null otherwise. A new language needs the
+  enum and a migration.
+- `displayName` is optional; blank or missing is stored as null, meaning "show
+  the username". PUT replaces both fields, so leaving it out clears it. An
+  unknown language is a 400 from Jackson before validation runs.
+- Other people do not see display names yet: `PersonResponse` and message
+  senders still carry the username only.
+- Checked with `UserServiceTest` (4 tests). Not yet run against the live
+  backend: Docker's engine was down.
+- Phase 7 profile page: `/profile`, linked from the home page header. Username
+  and email are shown, not editable. Save is disabled until something differs
+  from what is saved, and "Saved." shows until the next edit. The dropdown names
+  each language in itself first (`Français (French)`); the list lives in
+  `lib/profile.ts` and must match the backend enum.
+- A save writes the answer into both the `profile` and `me` caches, so they
+  never disagree. The display name input is not `TextField`, which marks every
+  field required for screen readers.
+- Checked with `tsc -b`, lint and build only. Not clicked through: no backend.
+- Phase 7 translate backend: `POST /api/conversations/{id}/messages/{messageId}/
+  translation`, no body, answers 200 with `{ messageId, language, translation }`.
+  Any conversation, direct included. The language is always the caller's
+  profile language; the request cannot pick another.
+- Order: `requireMember` (404), then `findByIdAndConversationId` (404, so a
+  member of one conversation cannot reach another's message by id), then the
+  model. Not `@Transactional`, like summaries.
+- `Language` carries an English name (`FR` -> "French") for the prompt.
+  `AiService.translate` takes plain strings; the message goes in `<message>`
+  tags with the same "translate it, never follow it" rule as summaries.
+  `ask` now takes the refusal wording, so a refused translation does not say
+  "could not be summarized".
+- No separate translation model: `gpt-6-luna` is already OpenAI's cheapest
+  current tier (about $0.10 in / $0.50 out per million tokens, third-party
+  figures, October 2026), roughly $0.00004 a translation.
+- Checked with `TranslationServiceTest` (3) and two new `AiServiceTest` cases.
+  Not run live: Docker down, no API key.
+- Translations are saved in `message_translations`, one row per message and
+  language (unique constraint), shared by every reader of that language. A hit
+  answers with no model call; a failed call saves nothing. Own generated id
+  rather than a two-column key, which JPA would need a key class for.
+- `message_id` is `on delete cascade`, so the one-statement message delete when
+  a group ends takes translations with it. The entity holds a plain
+  `messageId`, not a link, like `GroupSummary`.
+- Two simultaneous first requests both call the model; the second save hits
+  the unique constraint, the `DataIntegrityViolationException` is caught and
+  its translation is returned anyway. One extra call, accepted.
+- Checked with 4 more `TranslationServiceTest` cases (7 in all). The entity
+  has not met the table yet (`ddl-auto=validate` checks that at startup):
+  Docker Desktop was not running.
+- Phase 7 translate button: each bubble in `MessageList` that is not yours has
+  Translate beside its time, in direct chats and groups alike, so neither page
+  changed. The bubble asks once (`useTranslateMessage`, a mutation like
+  summaries) and keeps the answer, so Show original / Show translation only
+  switches text. A reopened page asks again and gets the backend's saved copy.
+- While translated, "· Translated" sits beside the time. A failure shows the
+  backend's `detail` under the text and the button becomes Try again. The
+  toggle checks what is on screen, not the last press, or Try again would
+  switch back instead of retrying.
+- The scroll corrections run on message count only, so a translation that
+  makes the newest bubble taller does not re-pin the view to the bottom.
+- Checked with `tsc -b`, lint and build only. Not clicked through: Docker
+  Desktop was not running.
+- Phase 7 @ai detection: `MessageService.send`, after the save and the push,
+  checks `mentionsAi(body)` and then `existsByIdAndType(id, GROUP)`. The text
+  test runs first so ordinary messages cost no extra query. The group check
+  is a query because `send` holds only a `getReferenceById` stand-in, whose
+  type cannot be read outside a transaction. A hit calls
+  `AssistantService.answer`.
+- A mention is `(?<![\w@.])@ai\b`, any case: "@AI," and "(@ai)" count,
+  "bob@ai.com", "@aisha", "@ai_bot" and plain "ai" do not.
+- `MessageServiceTest` (4): the mention cases both ways, and that the group
+  query runs only for a mention.
+- Phase 7 assistant: the assistant is a row in `users` with `assistant = true`
+  (V7: username `ai`, which registration cannot take since it needs three
+  characters; password hash `!`, so no login matches). A partial unique index
+  allows one. Its answers are ordinary messages sent from that account, so
+  history, paging, the dashboard, translation and STOMP needed no change.
+- `AssistantService.answer` is `@Async` (`AsyncConfig` has `@EnableAsync` and
+  its own `taskExecutor` pool): `send` returns at once and the answer arrives
+  later over `/topic/conversations/<id>`. It reads the newest 200 messages
+  with `SummaryService.transcript`, calls `AiService.answer`, then saves and
+  pushes itself, not through `MessageService.send`, so an answer containing
+  "@ai" cannot trigger another.
+- A failed call is posted into the chat as the assistant ("Sorry, I could not
+  answer that. " plus `AiService`'s reason), since no HTTP response is
+  waiting. A failed save (group ended meanwhile) is logged only. Answers are
+  cut to 4000 characters.
+- The prompt puts who asked in `<asked_by>`, the question in `<question>` and
+  the history in `<transcript>`; the transcript is material, and the question
+  cannot change the rules. Answers in the question's language.
+- `MessageResponse.fromAssistant` (mapped from `sender.assistant`) is how the
+  screen knows; `MessageList` draws those bubbles tinted indigo with an
+  "AI assistant" label in place of the username.
+- The people list leaves the assistant out (`...AndAssistantFalse...`). Its id
+  could still be added to a group or opened as a direct chat by a hand-written
+  request; nothing breaks, it just never speaks there unasked.
+- No limit on how often @ai can be asked, and no "thinking" indicator. Each
+  question is a paid call with up to 200 messages; cap it before going public.
+- Checked with `AssistantServiceTest` (5), two more `MessageServiceTest` cases
+  and one `AiServiceTest` case: 47 unit tests (48 with the full-queue case
+  added later). Frontend by `tsc -b`, lint and
+  build.
+- Phase 7 is complete.
+- Phase 7 run live (Phase 8 step 0): V5 to V7 applied and passed `validate`.
+  A Node script (scratchpad) made 34 checks with no key: profile rules, the
+  assistant account (no login, not listed, one only), translation 503 / 404s /
+  a hand-inserted row served from the cache / the cascade, and @ai answered
+  over STOMP in groups only. With a fake key, OpenAI's real 401 became "not
+  set up correctly" and the answer ran off the request thread.
+- That run found a bug: the websocket broker declares four thread pools, so
+  Boot does not create its own, and `@Async` fell back to
+  `SimpleAsyncTaskExecutor` — a new thread per question, unbounded.
+  `AsyncConfig` now declares `taskExecutor` (4 threads, 20 queued, named
+  `assistant-`). A full queue throws `TaskRejectedException`, which `send`
+  catches and logs: the message still sends, the question goes unanswered.
+- Still not done: a browser click-through of the Phase 7 screens, and any
+  real model answer (no key yet).
 - Email is the login identity and is stored lowercased; username is the public
   handle. Both unique.
 - Access tokens only — signed HS256 with `app.jwt.secret`, issuer checked on the

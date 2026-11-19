@@ -4,12 +4,19 @@ import java.util.List;
 import java.util.Optional;
 
 import com.roommind.entity.Conversation;
+import com.roommind.enums.ConversationType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ConversationRepository extends JpaRepository<Conversation, Long> {
+
+	/**
+	 * Whether a conversation is of this type, without loading it. Spring Data
+	 * writes the query from the method name.
+	 */
+	boolean existsByIdAndType(Long id, ConversationType type);
 
 	/**
 	 * The one-to-one conversation these two people share, if they already have

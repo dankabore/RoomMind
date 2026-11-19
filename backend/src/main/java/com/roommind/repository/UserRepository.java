@@ -22,6 +22,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
 	 *
 	 * An empty prefix is not a special case — every username starts with "" — so
 	 * the unfiltered list and a search are the same call.
+	 *
+	 * AssistantFalse leaves the assistant's account out: it is not a person to
+	 * message or add to a group.
 	 */
-	List<User> findByUsernameStartingWithIgnoreCaseAndIdNotOrderByUsernameAsc(String prefix, Long excludedId);
+	List<User> findByUsernameStartingWithIgnoreCaseAndIdNotAndAssistantFalseOrderByUsernameAsc(String prefix,
+			Long excludedId);
+
+	/** The assistant's account. The database allows at most one. */
+	Optional<User> findByAssistantTrue();
 }

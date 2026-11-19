@@ -95,16 +95,16 @@ the one above it runs.
 
 ## Phase 7 — Translation and @Ai
 
-- [ ] Profile endpoint to read and update display name and language
-- [ ] React: profile page
-- [ ] Translate endpoint, target language from the caller's profile
-- [ ] Cache translations by message and language
-- [ ] React: translate button per message, toggle back to original
-- [ ] Detect `@ai` in an incoming message, group chats only
-- [ ] Assistant service answering from conversation history
-- [ ] Save the answer as a message authored by the assistant
-- [ ] Broadcast the answer over STOMP like any other message
-- [ ] React: render assistant messages distinctly
+- [x] Profile endpoint to read and update display name and language
+- [x] React: profile page
+- [x] Translate endpoint, target language from the caller's profile
+- [x] Cache translations by message and language
+- [x] React: translate button per message, toggle back to original
+- [x] Detect `@ai` in an incoming message, group chats only
+- [x] Assistant service answering from conversation history
+- [x] Save the answer as a message authored by the assistant
+- [x] Broadcast the answer over STOMP like any other message
+- [x] React: render assistant messages distinctly
 
 ## Phase 8 — Deployed and demoable
 
